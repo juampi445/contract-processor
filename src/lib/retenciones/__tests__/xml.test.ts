@@ -20,6 +20,8 @@ describe('toCents', () => {
 });
 
 const rec = (i: number): RetencionXmlInput => ({
+  contrato: '126080440',
+  ordenInter: '62997621',
   liqCorrelDgi: `20000049034${i}`,
   fecha: '01/06/2026',
   importe: '451263,08',
@@ -29,8 +31,8 @@ const rec = (i: number): RetencionXmlInput => ({
 
 const CABEZAL_1 = `<SubTask_SELECT_ENVIO_CABEZAL_001>
 <CONTINTERNO></CONTINTERNO>
-<CONTRATO></CONTRATO>
-<ORDENINTER></ORDENINTER>
+<CONTRATO>126080440</CONTRATO>
+<ORDENINTER>62997621</ORDENINTER>
 <LIQCORRELDGI>200000490341</LIQCORRELDGI>
 <COMPANULA>0</COMPANULA>
 <FECHAORIGEN>01/06/2026</FECHAORIGEN>
@@ -53,7 +55,7 @@ const CABEZAL_1 = `<SubTask_SELECT_ENVIO_CABEZAL_001>
 </SubTask_SELECT_ENVIO_CABEZAL_001>`;
 
 const CUERPO_RETIVA_1 = `<SubTask_SELECT_ENVIO_CUERPO_001>
-<ORDENINTER></ORDENINTER>
+<ORDENINTER>62997621</ORDENINTER>
 <CODIMOVI>RETIVA</CODIMOVI>
 <DETALLE>3310-09051821</DETALLE>
 <SUMAIMP>0</SUMAIMP>
@@ -73,7 +75,7 @@ const CUERPO_RETIVA_1 = `<SubTask_SELECT_ENVIO_CUERPO_001>
 </SubTask_SELECT_ENVIO_CUERPO_001>`;
 
 const CUERPO_IN_1 = `<SubTask_SELECT_ENVIO_CUERPO_001>
-<ORDENINTER></ORDENINTER>
+<ORDENINTER>62997621</ORDENINTER>
 <CODIMOVI>IN</CODIMOVI>
 <DETALLE>Importe Neto</DETALLE>
 <SUMAIMP>1</SUMAIMP>
@@ -140,10 +142,20 @@ describe('buildXml', () => {
     expect(buildXml([rec(1), rec(2), rec(3)])).toBe(expected);
   });
 
+  it('fills CONTRATO and the three ORDENINTER tags of a record', () => {
+    // One record → one CABEZAL + two CUERPO, i.e. three <ORDENINTER> total,
+    // all carrying that record's value.
+    const xml = buildXml([rec(1)]);
+    expect(xml).toContain('<CONTRATO>126080440</CONTRATO>');
+    const ordenInter = xml.match(/<ORDENINTER>62997621<\/ORDENINTER>/g);
+    expect(ordenInter).toHaveLength(3);
+    expect(xml).not.toContain('<ORDENINTER></ORDENINTER>');
+  });
+
   it('never self-closes empty tags and never pretty-prints', () => {
     const xml = buildXml([rec(1)]);
-    expect(xml).toContain('<CONTRATO></CONTRATO>');
-    expect(xml).not.toContain('<CONTRATO/>');
+    expect(xml).toContain('<CONTINTERNO></CONTINTERNO>');
+    expect(xml).not.toContain('<CONTINTERNO/>');
     expect(xml).toContain('<OBSERVACION> </OBSERVACION>');
     // adjacent CABEZAL/CUERPO of same kind are glued, one newline between groups
     expect(xml).toContain(

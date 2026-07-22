@@ -7,6 +7,8 @@ import { escapeXml, normalizeFecha, toCents } from './toXmlValues';
  * two paths are guaranteed byte-identical.
  */
 export interface RetencionXmlInput {
+  contrato: string; // A (CONTRATO) — filled in by hand in Excel
+  ordenInter: string; // B (ORDENINTER) — filled in by hand in Excel
   liqCorrelDgi: string; // C
   fecha: string | Date; // D (FECHAORIGEN, also FECHAVTO)
   importe: string; // F (IMPSINIVA, also IMPTOTAL/BASE/IMPORIGEN)
@@ -28,6 +30,8 @@ const el = (tag: string, value = ''): string => `<${tag}>${value}</${tag}>`;
 
 /** Values of a record, already converted to XML format and escaped. */
 interface XmlValues {
+  contrato: string;
+  ordenInter: string;
   liq: string;
   fecha: string;
   importe: string;
@@ -36,6 +40,8 @@ interface XmlValues {
 }
 
 const toXmlValues = (r: RetencionXmlInput): XmlValues => ({
+  contrato: escapeXml(r.contrato),
+  ordenInter: escapeXml(r.ordenInter),
   liq: escapeXml(r.liqCorrelDgi),
   fecha: escapeXml(normalizeFecha(r.fecha)),
   importe: escapeXml(toCents(r.importe)),
@@ -47,8 +53,8 @@ function buildCabezal(v: XmlValues): string {
   return [
     '<SubTask_SELECT_ENVIO_CABEZAL_001>',
     el('CONTINTERNO'),
-    el('CONTRATO'),
-    el('ORDENINTER'),
+    el('CONTRATO', v.contrato),
+    el('ORDENINTER', v.ordenInter),
     el('LIQCORRELDGI', v.liq),
     el('COMPANULA', '0'),
     el('FECHAORIGEN', v.fecha),
@@ -82,7 +88,7 @@ function buildCuerpo(
 ): string {
   return [
     '<SubTask_SELECT_ENVIO_CUERPO_001>',
-    el('ORDENINTER'),
+    el('ORDENINTER', v.ordenInter),
     el('CODIMOVI', opts.codimovi),
     el('DETALLE', opts.detalle),
     el('SUMAIMP', opts.sumaimp),

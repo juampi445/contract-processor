@@ -198,6 +198,10 @@ export default function RetencionesUploader() {
     try {
       const xml = buildXml(
         okRows.map((r) => ({
+          // A/B are filled in by hand in Excel, so they're empty in this
+          // straight-from-PDF shortcut — same empty tags as before.
+          contrato: r.contrato ?? '',
+          ordenInter: r.ordenInter ?? '',
           liqCorrelDgi: r.liqCorrelDgi,
           fecha: r.fechaOrigen,
           importe: r.impSinIva,

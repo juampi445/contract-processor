@@ -1,0 +1,11 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Constancias de retención">
+  <rect width="32" height="32" rx="7" fill="#B45309"/>
+  <!-- Document with folded corner -->
+  <path d="M9 6.5h9.2L23 11.3V22a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2Z" fill="#FFFFFF"/>
+  <path d="M18 6.7v3.6a1 1 0 0 0 1 1h3.6L18 6.7Z" fill="#F3D9BE"/>
+  <!-- Text lines -->
+  <rect x="10.2" y="12.2" width="6.6" height="1.7" rx="0.85" fill="#B45309"/>
+  <rect x="10.2" y="15.4" width="8.6" height="1.7" rx="0.85" fill="#E4A868"/>
+  <!-- Export / convert arrow -->
+  <path d="M13.7 18H16.3V20.8H18.1L15 23 11.9 20.8H13.7Z" fill="#B45309"/>
+</svg>
