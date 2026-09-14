@@ -154,3 +154,17 @@ export function buildXml(records: RetencionXmlInput[]): string {
     '</CONTENT>',
   ].join('\n');
 }
+
+/**
+ * Build a timestamped filename ready to import into BIT:
+ * `DSEND_ENVIO_LIQUIDA_yyyy-MM-dd_HHmm.txt` — same convention as descargas'
+ * `descargasFileName`, with the domain keyword this XML actually uses
+ * (`ENVIO_LIQUIDA`, see `DATA_TABLE_NAMES` above) instead of `ENVIO_DESCARGA`.
+ */
+export function retencionesXmlFileName(date = new Date()): string {
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  const stamp =
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `_${pad(date.getHours())}${pad(date.getMinutes())}`;
+  return `DSEND_ENVIO_LIQUIDA_${stamp}.txt`;
+}

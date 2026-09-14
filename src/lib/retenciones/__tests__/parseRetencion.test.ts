@@ -82,8 +82,8 @@ describe('parseRetencion', () => {
     if (!result.ok) throw new Error('expected ok');
 
     expect(result.row).toEqual({
-      contrato: null,
-      ordenInter: null,
+      contrato: '',
+      ordenInter: '',
       liqCorrelDgi: '200000490345',
       fechaOrigen: '01/06/2026',
       fechaVto: '01/06/2026',

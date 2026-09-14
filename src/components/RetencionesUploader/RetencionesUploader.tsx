@@ -2,28 +2,41 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
+  Check,
+  FileCode2,
+  Loader2,
+  Sheet as SheetIcon,
+  Upload,
+  X,
+} from 'lucide-react';
+import {
   buildWorkbook,
   downloadBlob,
   retencionesFileName,
 } from '@/lib/retenciones/buildWorkbook';
-import { buildXml } from '@/lib/retenciones/buildXml';
+import { buildXml, retencionesXmlFileName } from '@/lib/retenciones/buildXml';
 import { extractPdfText } from '@/lib/retenciones/extractPdfText';
 import { parseRetencion } from '@/lib/retenciones/parseRetencion';
 import type { FileResult, RetencionRow } from '@/lib/retenciones/types';
+import { PageHeader } from '@/components/page-header';
+import { Button } from '@/components/ui/button';
+import { Card, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
 import {
-  IconAlert,
-  IconCheck,
-  IconCode,
-  IconSheet,
-  IconShield,
-  IconSpinner,
-  IconUpload,
-  IconX,
-} from './Icons';
-import styles from './RetencionesUploader.module.scss';
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import XlsxToXmlPanel from './XlsxToXmlPanel';
 
-const XML_MIME = 'text/xml;charset=utf-8';
+const TXT_MIME = 'text/plain;charset=utf-8';
 const PARSE_CONCURRENCY = 3;
 
 /** Focused preview: the fields that come from the PDF, in a friendly order. */
@@ -112,6 +125,24 @@ export default function RetencionesUploader() {
     );
   }, []);
 
+  /** Edit CONTRATO/ORDENINTER directly in the preview — they never come from the PDF. */
+  const updateRowField = useCallback(
+    (id: string, field: 'contrato' | 'ordenInter', raw: string) => {
+      const value = raw.replace(/\D/g, '');
+      setEntries((prev) =>
+        prev.map((e) =>
+          e.id === id && e.result?.row
+            ? {
+                ...e,
+                result: { ...e.result, row: { ...e.result.row, [field]: value } },
+              }
+            : e,
+        ),
+      );
+    },
+    [],
+  );
+
   const addFiles = useCallback(
     async (fileList: FileList | File[]) => {
       const pdfs = Array.from(fileList).filter(
@@ -162,12 +193,13 @@ export default function RetencionesUploader() {
     setGenError(null);
   }, []);
 
-  const okRows = useMemo(
-    () =>
-      entries
-        .filter((e) => e.result?.status === 'ok' && e.result.row)
-        .map((e) => e.result!.row!),
+  const okEntries = useMemo(
+    () => entries.filter((e) => e.result?.status === 'ok' && e.result.row),
     [entries],
+  );
+  const okRows = useMemo(
+    () => okEntries.map((e) => e.result!.row!),
+    [okEntries],
   );
 
   const isParsing = entries.some((e) => e.parsing);
@@ -198,10 +230,8 @@ export default function RetencionesUploader() {
     try {
       const xml = buildXml(
         okRows.map((r) => ({
-          // A/B are filled in by hand in Excel, so they're empty in this
-          // straight-from-PDF shortcut — same empty tags as before.
-          contrato: r.contrato ?? '',
-          ordenInter: r.ordenInter ?? '',
+          contrato: r.contrato,
+          ordenInter: r.ordenInter,
           liqCorrelDgi: r.liqCorrelDgi,
           fecha: r.fechaOrigen,
           importe: r.impSinIva,
@@ -209,8 +239,8 @@ export default function RetencionesUploader() {
           concepto: r.conceptoRetIva,
         })),
       );
-      const blob = new Blob([xml], { type: XML_MIME });
-      downloadBlob(blob, retencionesFileName('xml'));
+      const blob = new Blob([xml], { type: TXT_MIME });
+      downloadBlob(blob, retencionesXmlFileName());
     } catch (err) {
       setGenError(err instanceof Error ? err.message : String(err));
     }
@@ -219,36 +249,20 @@ export default function RetencionesUploader() {
   const okCount = okRows.length;
 
   return (
-    <div className={styles.page}>
-      <header className={styles.appbar}>
-        <div className={styles.brand}>
-          <span className={styles.mark} aria-hidden="true">
-            BP
-          </span>
-          <div>
-            <h1 className={styles.title}>
-              Braulio <em>“the old men”</em> Ponce
-            </h1>
-            <p className={styles.subtitle}>
-              Procesador de constancias de retención
-            </p>
-          </div>
-        </div>
-        <span className={styles.localTag}>
-          <IconShield size={15} />
-          100% local
-        </span>
-      </header>
+    <div className="flex min-h-svh flex-col">
+      <PageHeader
+        title="Retenciones"
+        description="Arrastrá las constancias y descargá el Excel o el TXT."
+      />
 
-      <main className={styles.shell}>
-        <section className={styles.block}>
-          <div className={styles.blockHead}>
-            <h2>Constancias en PDF</h2>
-            <p>Arrastrá las constancias y descargá el Excel o el XML.</p>
-          </div>
-
+      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-8 p-4 sm:p-6">
+        <section className="flex flex-col gap-4">
           <div
-            className={`${styles.dropzone} ${isDragging ? styles.dragging : ''}`}
+            className={cn(
+              'group flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border px-6 py-12 text-center transition-[border-color,background-color,transform] duration-200',
+              'hover:border-primary/40 hover:bg-muted/40',
+              isDragging && 'scale-[1.01] border-primary bg-primary/5',
+            )}
             onDragOver={(e) => {
               e.preventDefault();
               setIsDragging(true);
@@ -273,35 +287,33 @@ export default function RetencionesUploader() {
               hidden
               onChange={onSelect}
             />
-            <span className={styles.dropIcon}>
-              <IconUpload size={26} />
+            <span className="mb-1 grid size-12 place-items-center rounded-xl bg-primary/10 text-primary transition-transform duration-200 group-hover:-translate-y-0.5">
+              <Upload className="size-6" />
             </span>
-            <p className={styles.dropTitle}>Arrastrá los PDF acá</p>
-            <p className={styles.dropHint}>
-              o <span className={styles.dropLink}>elegilos de tu computadora</span>
+            <p className="text-base font-medium text-foreground">
+              Arrastrá los PDF acá
+            </p>
+            <p className="text-sm text-muted-foreground">
+              o <span className="font-medium text-primary underline underline-offset-2">elegilos de tu computadora</span>
               {' · '}podés cargar varios a la vez
             </p>
           </div>
 
           {entries.length > 0 && (
-            <div className={styles.fileList}>
-              <div className={styles.fileListHead}>
+            <Card className="animate-in gap-0 fade-in-0 p-0 duration-300">
+              <div className="flex items-center justify-between border-b border-border px-4 py-3 text-sm font-medium text-muted-foreground">
                 <span>
                   {entries.length} archivo{entries.length === 1 ? '' : 's'}
                   {isParsing && (
-                    <span className={styles.processing}> · leyendo…</span>
+                    <span className="text-primary"> · leyendo…</span>
                   )}
                 </span>
-                <button
-                  type="button"
-                  className={styles.linkBtn}
-                  onClick={clearAll}
-                >
+                <Button variant="ghost" size="sm" onClick={clearAll}>
                   Quitar todos
-                </button>
+                </Button>
               </div>
 
-              <ul>
+              <ul className="max-h-[180px] overflow-y-auto">
                 {entries.map((entry, i) => {
                   const status = entry.parsing
                     ? 'parsing'
@@ -309,11 +321,19 @@ export default function RetencionesUploader() {
                   return (
                     <li
                       key={entry.id}
-                      className={styles.fileItem}
+                      className="flex animate-in items-start gap-3 border-b border-border px-4 py-3 fade-in slide-in-from-bottom-1 duration-300 last:border-0"
                       style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
                     >
                       <span
-                        className={`${styles.badge} ${styles[`badge_${status}`]}`}
+                        key={status}
+                        className={cn(
+                          'mt-0.5 grid size-7 shrink-0 animate-in place-items-center rounded-md zoom-in-75 duration-200',
+                          status === 'ok' && 'bg-success/10 text-success',
+                          status === 'error' &&
+                            'bg-destructive/10 text-destructive',
+                          status === 'parsing' &&
+                            'bg-muted text-muted-foreground',
+                        )}
                         role="img"
                         aria-label={
                           status === 'parsing'
@@ -324,24 +344,31 @@ export default function RetencionesUploader() {
                         }
                       >
                         {status === 'parsing' ? (
-                          <IconSpinner size={16} />
+                          <Loader2 className="size-4 animate-spin" />
                         ) : status === 'ok' ? (
-                          <IconCheck size={16} />
+                          <Check className="size-4" />
                         ) : (
-                          <IconAlert size={15} />
+                          <AlertTriangle className="size-3.5" />
                         )}
                       </span>
 
-                      <div className={styles.fileMeta}>
-                        <span className={styles.fileName}>{entry.file.name}</span>
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-foreground">
+                          {entry.file.name}
+                        </span>
                         {status === 'ok' && (
-                          <span className={styles.okNote}>Listo para exportar</span>
+                          <span className="text-xs text-success">
+                            Listo para exportar
+                          </span>
                         )}
                         {entry.result?.status === 'error' &&
                           entry.result.errors && (
-                            <ul className={styles.errorList}>
+                            <ul className="mt-1 list-disc space-y-0.5 pl-4">
                               {entry.result.errors.map((err, j) => (
-                                <li key={j}>
+                                <li
+                                  key={j}
+                                  className="text-xs leading-relaxed text-destructive"
+                                >
                                   {err.field !== 'text' ? `${err.field}: ` : ''}
                                   {err.message}
                                 </li>
@@ -350,75 +377,114 @@ export default function RetencionesUploader() {
                           )}
                       </div>
 
-                      <button
+                      <Button
                         type="button"
-                        className={styles.removeBtn}
+                        variant="ghost"
+                        size="icon-sm"
+                        className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                         onClick={() => removeEntry(entry.id)}
                         aria-label={`Quitar ${entry.file.name}`}
                       >
-                        <IconX size={17} />
-                      </button>
+                        <X className="size-4" />
+                      </Button>
                     </li>
                   );
                 })}
               </ul>
-            </div>
+            </Card>
           )}
 
           {okCount > 0 && (
-            <div className={styles.previewWrap}>
-              <div className={styles.previewHead}>
-                <h3>Vista previa</h3>
-                <span className={styles.count}>
+            <Card className="animate-in gap-0 fade-in-0 p-0 duration-300">
+              <div className="flex items-baseline justify-between border-b border-border px-4 py-3">
+                <div>
+                  <CardTitle className="text-sm">Vista previa</CardTitle>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Completá Contrato y Orden Inter acá para exportar el registro completo.
+                  </p>
+                </div>
+                <span className="shrink-0 text-xs text-muted-foreground">
                   {okCount} fila{okCount === 1 ? '' : 's'}
                 </span>
               </div>
-              <div className={styles.tableScroll}>
-                <table className={styles.preview}>
-                  <thead>
-                    <tr>
-                      <th className={styles.rowNum} scope="col">
-                        #
-                      </th>
-                      {PREVIEW_COLS.map((c) => (
-                        <th
-                          key={c.header}
-                          scope="col"
-                          className={c.numeric ? styles.numeric : undefined}
-                        >
-                          {c.header}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {okRows.map((row, i) => (
-                      <tr key={i}>
-                        <td className={styles.rowNum}>{i + 1}</td>
+              <Table containerClassName="max-h-[424px] overflow-y-auto">
+                <TableHeader className="sticky top-0 z-10 bg-card">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="w-1 text-right text-muted-foreground">
+                      #
+                    </TableHead>
+                    <TableHead className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                      Contrato
+                    </TableHead>
+                    <TableHead className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                      Orden inter
+                    </TableHead>
+                    {PREVIEW_COLS.map((c) => (
+                      <TableHead
+                        key={c.header}
+                        className={cn(
+                          'text-xs font-semibold tracking-wide text-muted-foreground uppercase',
+                          c.numeric && 'text-right',
+                        )}
+                      >
+                        {c.header}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {okEntries.map((entry, i) => {
+                    const row = entry.result!.row!;
+                    return (
+                      <TableRow key={entry.id}>
+                        <TableCell className="text-right text-muted-foreground tabular-nums">
+                          {i + 1}
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={row.contrato}
+                            onChange={(e) =>
+                              updateRowField(entry.id, 'contrato', e.target.value)
+                            }
+                            inputMode="numeric"
+                            placeholder="—"
+                            className="h-8 w-28"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={row.ordenInter}
+                            onChange={(e) =>
+                              updateRowField(entry.id, 'ordenInter', e.target.value)
+                            }
+                            inputMode="numeric"
+                            placeholder="—"
+                            className="h-8 w-28"
+                          />
+                        </TableCell>
                         {PREVIEW_COLS.map((c) => (
-                          <td
+                          <TableCell
                             key={c.header}
-                            className={c.numeric ? styles.numeric : undefined}
+                            className={cn(c.numeric && 'text-right tabular-nums')}
                           >
                             {c.get(row)}
-                          </td>
+                          </TableCell>
                         ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </Card>
           )}
 
           {entries.length > 0 && (
-            <div className={styles.actions}>
+            <div className="flex flex-col items-start gap-3 pt-1">
               {errorCount > 0 && (
-                <label className={styles.skipToggle}>
-                  <input
-                    type="checkbox"
+                <label className="flex cursor-pointer items-center gap-2.5 text-sm text-muted-foreground">
+                  <Checkbox
                     checked={skipFailed}
-                    onChange={(e) => setSkipFailed(e.target.checked)}
+                    onCheckedChange={(checked) => setSkipFailed(checked === true)}
                   />
                   <span>
                     Generar igual, omitiendo {errorCount} archivo
@@ -428,37 +494,36 @@ export default function RetencionesUploader() {
                 </label>
               )}
 
-              <div className={styles.buttonRow}>
-                <button
+              <div className="flex flex-wrap gap-2.5">
+                <Button
                   type="button"
-                  className={styles.primaryBtn}
                   disabled={!canGenerate}
                   onClick={() => void generate()}
                 >
                   {isGenerating ? (
-                    <IconSpinner size={18} />
+                    <Loader2 className="animate-spin" />
                   ) : (
-                    <IconSheet size={18} />
+                    <SheetIcon />
                   )}
                   {isGenerating
                     ? 'Generando…'
                     : `Descargar Excel${okCount ? ` (${okCount})` : ''}`}
-                </button>
+                </Button>
 
-                <button
+                <Button
                   type="button"
-                  className={styles.secondaryBtn}
+                  variant="outline"
                   disabled={okCount === 0 || isParsing || isGenerating}
                   onClick={generateXml}
                 >
-                  <IconCode size={18} />
-                  Descargar XML{okCount ? ` (${okCount})` : ''}
-                </button>
+                  <FileCode2 />
+                  Descargar TXT{okCount ? ` (${okCount})` : ''}
+                </Button>
               </div>
 
               {genError && (
-                <p className={styles.genError} role="alert">
-                  <IconAlert size={16} />
+                <p className="flex items-center gap-1.5 text-sm text-destructive" role="alert">
+                  <AlertTriangle className="size-4" />
                   {genError}
                 </p>
               )}
@@ -466,15 +531,17 @@ export default function RetencionesUploader() {
           )}
         </section>
 
-        <div className={styles.altDivider}>
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <Separator className="flex-1" />
           <span>¿ya tenés un Excel?</span>
+          <Separator className="flex-1" />
         </div>
 
         <XlsxToXmlPanel />
       </main>
 
-      <footer className={styles.pageFoot}>
-        Constancias de retención · IVA Rég. Granos RG AFIP 2300
+      <footer className="border-t border-border p-6 text-center text-xs text-muted-foreground">
+        Coopagro · IVA Rég. Granos RG AFIP 2300
       </footer>
     </div>
   );

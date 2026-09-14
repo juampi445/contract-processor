@@ -1,22 +1,21 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { buildXml } from '@/lib/retenciones/buildXml';
 import {
-  downloadBlob,
-  retencionesFileName,
-} from '@/lib/retenciones/buildWorkbook';
+  AlertTriangle,
+  FileCode2,
+  FileUp,
+  Loader2,
+  Sheet as SheetIcon,
+} from 'lucide-react';
+import { buildXml, retencionesXmlFileName } from '@/lib/retenciones/buildXml';
+import { downloadBlob } from '@/lib/retenciones/buildWorkbook';
 import { readXlsx, type XlsxReadResult } from '@/lib/retenciones/readXlsx';
-import {
-  IconAlert,
-  IconCode,
-  IconFile,
-  IconSheet,
-  IconSpinner,
-} from './Icons';
-import styles from './XlsxToXmlPanel.module.scss';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 
-const XML_MIME = 'text/xml;charset=utf-8';
+const TXT_MIME = 'text/plain;charset=utf-8';
 
 /**
  * Standalone flow: take one filled XLSX (produced earlier by this tool,
@@ -64,8 +63,8 @@ export default function XlsxToXmlPanel() {
     setIsGenerating(true);
     try {
       const xml = buildXml(result.rows);
-      const blob = new Blob([xml], { type: XML_MIME });
-      downloadBlob(blob, retencionesFileName('xml'));
+      const blob = new Blob([xml], { type: TXT_MIME });
+      downloadBlob(blob, retencionesXmlFileName());
     } catch (err) {
       setGenError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -84,30 +83,36 @@ export default function XlsxToXmlPanel() {
     !isReading;
 
   return (
-    <section className={styles.panel}>
-      <div className={styles.head}>
-        <span className={styles.headIcon}>
-          <IconSheet size={18} />
+    <Card className="bg-muted/30 p-5">
+      <div className="flex items-start gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-card text-muted-foreground ring-1 ring-foreground/10">
+          <SheetIcon className="size-4.5" />
         </span>
         <div>
-          <h2>Convertir un Excel a XML</h2>
-          <p>
+          <h2 className="text-sm font-semibold tracking-tight text-foreground">
+            Convertir un Excel a TXT
+          </h2>
+          <p className="mt-1 max-w-[62ch] text-sm text-muted-foreground">
             Subí un Excel ya generado por esta herramienta (podés haberlo
-            editado a mano) y descargá el XML. No necesita PDFs.
+            editado a mano) y descargá el TXT. No necesita PDFs.
           </p>
         </div>
       </div>
 
-      <div className={styles.controls}>
-        <button
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
           type="button"
-          className={styles.selectBtn}
+          variant="outline"
           onClick={() => inputRef.current?.click()}
           disabled={isReading}
         >
-          {isReading ? <IconSpinner size={17} /> : <IconFile size={17} />}
+          {isReading ? (
+            <Loader2 className="animate-spin" />
+          ) : (
+            <FileUp />
+          )}
           {isReading ? 'Leyendo…' : 'Elegir archivo .xlsx'}
-        </button>
+        </Button>
         <input
           ref={inputRef}
           type="file"
@@ -115,47 +120,54 @@ export default function XlsxToXmlPanel() {
           hidden
           onChange={(e) => void onSelect(e)}
         />
-        {fileName && <span className={styles.fileName}>{fileName}</span>}
+        {fileName && (
+          <span className="truncate text-sm text-muted-foreground">
+            {fileName}
+          </span>
+        )}
       </div>
 
       {result?.fatal && (
-        <p className={styles.fatal} role="alert">
-          <IconAlert size={16} />
+        <p className="flex items-center gap-1.5 text-sm text-destructive" role="alert">
+          <AlertTriangle className="size-4" />
           {result.fatal}
         </p>
       )}
 
       {result && !result.fatal && (
-        <div className={styles.summary}>
-          <p className={styles.counts}>
-            <span className={styles.okCount}>
+        <div className="flex animate-in flex-col items-start gap-3.5 fade-in-0 duration-300">
+          <p className="flex flex-wrap items-center gap-2.5 text-sm">
+            <span className="font-semibold text-foreground">
               {validCount} fila{validCount === 1 ? '' : 's'} válida
               {validCount === 1 ? '' : 's'}
             </span>
             {errorCount > 0 && (
-              <span className={styles.errPill}>
-                <IconAlert size={13} />
+              <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+                <AlertTriangle className="size-3" />
                 {errorCount} con error{errorCount === 1 ? '' : 'es'}
               </span>
             )}
           </p>
 
           {errorCount > 0 && (
-            <ul className={styles.errorList}>
+            <ul className="flex w-full flex-col gap-1">
               {result.errors.map((err) => (
-                <li key={err.row}>
-                  <strong>Fila {err.row}:</strong> {err.message}
+                <li
+                  key={err.row}
+                  className="rounded-md bg-destructive/10 px-2.5 py-1.5 text-sm leading-relaxed text-destructive"
+                >
+                  <strong className="font-semibold">Fila {err.row}:</strong>{' '}
+                  {err.message}
                 </li>
               ))}
             </ul>
           )}
 
           {errorCount > 0 && (
-            <label className={styles.skipToggle}>
-              <input
-                type="checkbox"
+            <label className="flex cursor-pointer items-center gap-2.5 text-sm text-muted-foreground">
+              <Checkbox
                 checked={skipErrors}
-                onChange={(e) => setSkipErrors(e.target.checked)}
+                onCheckedChange={(checked) => setSkipErrors(checked === true)}
               />
               <span>
                 Generar igual, omitiendo {errorCount} fila
@@ -164,26 +176,25 @@ export default function XlsxToXmlPanel() {
             </label>
           )}
 
-          <button
-            type="button"
-            className={styles.primaryBtn}
-            disabled={!canGenerate}
-            onClick={generate}
-          >
-            {isGenerating ? <IconSpinner size={18} /> : <IconCode size={18} />}
+          <Button type="button" disabled={!canGenerate} onClick={generate}>
+            {isGenerating ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <FileCode2 />
+            )}
             {isGenerating
               ? 'Generando…'
-              : `Descargar XML${validCount ? ` (${validCount})` : ''}`}
-          </button>
+              : `Descargar TXT${validCount ? ` (${validCount})` : ''}`}
+          </Button>
 
           {genError && (
-            <p className={styles.fatal} role="alert">
-              <IconAlert size={16} />
+            <p className="flex items-center gap-1.5 text-sm text-destructive" role="alert">
+              <AlertTriangle className="size-4" />
               {genError}
             </p>
           )}
         </div>
       )}
-    </section>
+    </Card>
   );
 }

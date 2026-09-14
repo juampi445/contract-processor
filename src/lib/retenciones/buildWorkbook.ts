@@ -1,6 +1,9 @@
 import ExcelJS from 'exceljs';
+import { downloadBlob } from '@/lib/downloadBlob';
 import { toCents } from './toXmlValues';
 import type { RetencionRow } from './types';
+
+export { downloadBlob };
 
 const TEMPLATE_URL = '/templates/base.xlsx';
 const SHEET_NAME = 'Hoja1';
@@ -33,8 +36,9 @@ function toAmountNumber(importe: string): number {
  * header). Cells are written with the correct types + explicit number formats
  * to match the destination system's reference template:
  *
- *   A CONTRATO      — left empty (filled by hand)
- *   B ORDENINTER    — left empty (filled by hand)
+ *   A CONTRATO      string,   when filled in (else left empty for later) —
+ *     text, not number: a leading zero ("0123") is part of the value
+ *   B ORDENINTER    string,   when filled in (else left empty for later) — same
  *   C LIQCORRELDGI  number,   numFmt '0'
  *   D FECHAORIGEN   Date,     numFmt 'dd/mm/yyyy'
  *   E FECHAVTO      formula =D{n}, numFmt 'dd/mm/yyyy'
@@ -54,6 +58,9 @@ export function applyRows(ws: ExcelJS.Worksheet, rows: RetencionRow[]): void {
   rows.forEach((r, i) => {
     const rowNo = 2 + i;
     const row = ws.getRow(rowNo);
+
+    if (r.contrato) row.getCell(1).value = r.contrato; // A — text, if filled (keeps leading zeros)
+    if (r.ordenInter) row.getCell(2).value = r.ordenInter; // B — text, if filled (keeps leading zeros)
 
     const c = row.getCell(3); // C — number
     c.value = Number(r.liqCorrelDgi);
@@ -78,7 +85,7 @@ export function applyRows(ws: ExcelJS.Worksheet, rows: RetencionRow[]): void {
     row.getCell(8).value = r.nroRegOlcu; // H — number
     row.getCell(9).value = Number(r.cuitCorredor); // I — number
     row.getCell(11).value = r.conceptoRetIva; // K — string
-    // A, B and J stay genuinely empty — never touched.
+    // J stays genuinely empty — never touched.
 
     row.commit();
   });
@@ -111,23 +118,12 @@ export async function buildWorkbook(rows: RetencionRow[]): Promise<Blob> {
   return new Blob([buffer], { type: XLSX_MIME });
 }
 
-/** Build a timestamped filename: `retenciones_yyyyMMdd_HHmm.<ext>`. */
-export function retencionesFileName(ext = 'xlsx', date = new Date()): string {
+/** Build a timestamped filename: `retenciones_yyyy-MM-dd_HHmm.xlsx`. */
+export function retencionesFileName(date = new Date()): string {
   const pad = (n: number): string => String(n).padStart(2, '0');
   const stamp =
-    `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}` +
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
     `_${pad(date.getHours())}${pad(date.getMinutes())}`;
-  return `retenciones_${stamp}.${ext}`;
+  return `retenciones_${stamp}.xlsx`;
 }
 
-/** Trigger a browser download for a Blob. */
-export function downloadBlob(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}

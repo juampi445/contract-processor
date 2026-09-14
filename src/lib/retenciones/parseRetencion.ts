@@ -81,8 +81,8 @@ export function parseRetencion(text: string): ParseResult {
   }
 
   const row: RetencionRow = {
-    contrato: null,
-    ordenInter: null,
+    contrato: '',
+    ordenInter: '',
     liqCorrelDgi,
     fechaOrigen,
     fechaVto: fechaOrigen, // E === D

@@ -1,5 +1,5 @@
-import RetencionesUploader from '@/components/RetencionesUploader';
+import { redirect } from 'next/navigation';
 
 export default function Home() {
-  return <RetencionesUploader />;
+  redirect('/retenciones');
 }

@@ -1,11 +1,13 @@
 /**
  * One appended row of the target sheet "Hoja1" (columns A–K).
- * Empty columns are `null` on purpose so the writer can leave the cell
- * genuinely empty (not an empty string) while keeping column alignment.
+ * CONTRATO/ORDENINTER aren't on the PDF, so parsing starts them at `''`;
+ * the preview table lets the user fill them in before exporting. The
+ * remaining empty columns are `null` on purpose so the writer can leave the
+ * cell genuinely empty (not an empty string) while keeping column alignment.
  */
 export interface RetencionRow {
-  contrato: null; // A - CONTRATO (empty)
-  ordenInter: null; // B - ORDENINTER (empty)
+  contrato: string; // A - CONTRATO (filled in the preview, or later by hand)
+  ordenInter: string; // B - ORDENINTER (filled in the preview, or later by hand)
   liqCorrelDgi: string; // C - LIQCORRELDGI  e.g. '200000490345'
   fechaOrigen: string; // D - FECHAORIGEN   e.g. '01/06/2026'
   fechaVto: string; // E - FECHAVTO      same as D

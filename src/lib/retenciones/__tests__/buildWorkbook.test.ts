@@ -4,8 +4,8 @@ import { applyRows } from '../buildWorkbook';
 import type { RetencionRow } from '../types';
 
 const baseRow: RetencionRow = {
-  contrato: null,
-  ordenInter: null,
+  contrato: '',
+  ordenInter: '',
   liqCorrelDgi: '200000490345',
   fechaOrigen: '01/06/2026',
   fechaVto: '01/06/2026',
@@ -37,11 +37,21 @@ describe('applyRows — cell types', () => {
     expect(typeof r.getCell(11).value).toBe('string'); // K CONCEPTO_RETIVA
   });
 
-  it('leaves A, B and J genuinely empty', () => {
+  it('leaves A, B and J empty when contrato/ordenInter are blank', () => {
     const r = sheetWithRow().getRow(2);
     expect(r.getCell(1).value).toBeNull(); // A
     expect(r.getCell(2).value).toBeNull(); // B
     expect(r.getCell(10).value).toBeNull(); // J
+  });
+
+  it('writes A and B as text when contrato/ordenInter are filled, keeping leading zeros', () => {
+    const r = sheetWithRow({
+      ...baseRow,
+      contrato: '0123',
+      ordenInter: '62997621',
+    }).getRow(2);
+    expect(r.getCell(1).value).toBe('0123'); // A
+    expect(r.getCell(2).value).toBe('62997621'); // B
   });
 
   it('stores the amount as a decimal, not cents', () => {
