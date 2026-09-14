@@ -9,7 +9,10 @@ import { AppSidebar } from '@/components/app-sidebar';
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: 'Braulio "the old men" Ponce — Coopagro',
+  title: {
+    default: 'Coopagro · Gestión de granos',
+    template: '%s · Coopagro',
+  },
   description:
     'Procesador de constancias de retención: convierte los PDF a Excel y XML, todo en el navegador.',
 };

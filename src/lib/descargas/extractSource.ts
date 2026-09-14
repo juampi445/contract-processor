@@ -1,4 +1,5 @@
 import { dateValueToDDMMYYYY } from './dates';
+import { formatQuantity, parseQuantity } from './numbers';
 import type { SourceCell, SourceMatrix } from './readSourceWorkbook';
 import {
   BASE_COLUMNS,
@@ -28,10 +29,10 @@ export interface SourceExtractResult {
 
 function normalizeFieldValue(field: BaseColumn, raw: SourceCell): string {
   if (raw === null || raw === undefined) return '';
-  if (field === 'FECHA') return dateValueToDDMMYYYY(raw as string | Date);
+  if (field === 'FECHA') return dateValueToDDMMYYYY(raw);
   if (field === 'TOTNETO') {
-    const n = Number(raw);
-    return Number.isFinite(n) ? String(Math.abs(n)) : String(raw).trim();
+    const n = parseQuantity(raw);
+    return n !== null ? formatQuantity(Math.abs(n)) : String(raw).trim();
   }
   if (raw instanceof Date) return dateValueToDDMMYYYY(raw);
   return String(raw).trim();
@@ -159,16 +160,15 @@ export function mergeWithManualValues(
         : (manualValues[column] ?? '');
     }
 
-    if (pesobrutIsDerivable) {
-      const totbrut = Number(row.TOTBRUT);
-      const totneto = Number(row.TOTNETO);
-      if (
-        row.TOTBRUT !== '' &&
-        Number.isFinite(totbrut) &&
-        Number.isFinite(totneto)
-      ) {
-        row.PESOBRUT = String(totbrut + totneto);
-      }
+    // Written as plain numbers so "1.000" or "1000,5" reach the Excel/TXT
+    // the same way they're summed below.
+    const totbrut = parseQuantity(row.TOTBRUT);
+    const totneto = parseQuantity(row.TOTNETO);
+    if (totbrut !== null) row.TOTBRUT = formatQuantity(totbrut);
+    if (totneto !== null) row.TOTNETO = formatQuantity(totneto);
+
+    if (pesobrutIsDerivable && totbrut !== null && totneto !== null) {
+      row.PESOBRUT = formatQuantity(totbrut + totneto);
     }
 
     return row;

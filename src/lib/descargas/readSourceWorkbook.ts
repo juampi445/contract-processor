@@ -15,6 +15,30 @@ async function isLegacyXls(file: File): Promise<boolean> {
   return OLE2_MAGIC.every((byte, i) => head[i] === byte);
 }
 
+/**
+ * True for a number format that shows exactly three decimals ("0.000",
+ * "#,##0.000", "[$-2C0A]#,##0.000_);(#,##0.000)"). Format codes always use
+ * "." for decimals, whatever the viewer's locale.
+ */
+function showsThreeDecimals(numFmt: string | undefined): boolean {
+  if (!numFmt) return false;
+  const positive = numFmt.split(';')[0].replace(/\[[^\]]*\]|"[^"]*"/g, '');
+  if (/[dmyhs]/i.test(positive)) return false; // date/time format
+  return /\.0{3}(?![0#?])/.test(positive);
+}
+
+/**
+ * A number shown with three decimals ("33,840" on screen for 33.84) is
+ * handed on as that displayed text, so the extractor reads it the way the
+ * user sees it (thousands) instead of as the stored fraction. Other numbers
+ * stay numbers.
+ */
+function numberAsDisplayed(value: number, numFmt: string | undefined): SourceCell {
+  return showsThreeDecimals(numFmt) && !Number.isInteger(value)
+    ? value.toFixed(3)
+    : value;
+}
+
 /** Unwrap exceljs's formula ({result}) and rich-text cell shapes to a plain value. */
 function unwrapCellValue(value: unknown): SourceCell {
   if (value === null || value === undefined) return null;
@@ -46,7 +70,9 @@ async function readModernWorkbook(file: File): Promise<SourceMatrix> {
   ws.eachRow({ includeEmpty: true }, (row) => {
     const cells: SourceCell[] = [];
     for (let c = 1; c <= ws.columnCount; c += 1) {
-      cells.push(unwrapCellValue(row.getCell(c).value));
+      const cell = row.getCell(c);
+      const value = unwrapCellValue(cell.value);
+      cells.push(typeof value === 'number' ? numberAsDisplayed(value, cell.numFmt) : value);
     }
     matrix.push(cells);
   });
@@ -58,14 +84,26 @@ async function readLegacyWorkbook(file: File): Promise<SourceMatrix> {
   const wb = readLegacyBook(await file.arrayBuffer(), {
     type: 'array',
     cellDates: true,
+    cellNF: true, // keep each cell's number format (cell.z) for numberAsDisplayed
   });
   const ws = wb.Sheets[wb.SheetNames[0]];
   if (!ws) return [];
-  return legacyUtils.sheet_to_json<SourceCell[]>(ws, {
+  const matrix = legacyUtils.sheet_to_json<SourceCell[]>(ws, {
     header: 1,
     defval: null,
     raw: true,
+    blankrows: true,
   });
+  // sheet_to_json drops formats, so re-check numeric cells against theirs.
+  const origin = legacyUtils.decode_range(ws['!ref'] ?? 'A1');
+  matrix.forEach((row, r) =>
+    row.forEach((value, c) => {
+      if (typeof value !== 'number') return;
+      const cell = ws[legacyUtils.encode_cell({ r: r + origin.s.r, c: c + origin.s.c })];
+      row[c] = numberAsDisplayed(value, cell?.z as string | undefined);
+    }),
+  );
+  return matrix;
 }
 
 /**
