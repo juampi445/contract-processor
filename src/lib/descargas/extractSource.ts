@@ -160,7 +160,7 @@ export function mergeWithManualValues(
         : (manualValues[column] ?? '');
     }
 
-    // Written as plain numbers so "1.000" or "1000,5" reach the Excel/TXT
+    // Written as plain numbers so "1.000" or "1000,5" reach the Excel/XML
     // the same way they're summed below.
     const totbrut = parseQuantity(row.TOTBRUT);
     const totneto = parseQuantity(row.TOTNETO);

@@ -52,7 +52,8 @@ const toXmlValues = (r: RetencionXmlInput): XmlValues => ({
 function buildCabezal(v: XmlValues): string {
   return [
     '<SubTask_SELECT_ENVIO_CABEZAL_001>',
-    el('CONTINTERNO'),
+    // BIT rejects the import if CONTINTERNO is empty; it must mirror CONTRATO.
+    el('CONTINTERNO', v.contrato),
     el('CONTRATO', v.contrato),
     el('ORDENINTER', v.ordenInter),
     el('LIQCORRELDGI', v.liq),
@@ -157,7 +158,7 @@ export function buildXml(records: RetencionXmlInput[]): string {
 
 /**
  * Build a timestamped filename ready to import into BIT:
- * `DSEND_ENVIO_LIQUIDA_yyyy-MM-dd_HHmm.txt` — same convention as descargas'
+ * `DSEND_ENVIO_LIQUIDA_yyyy-MM-dd_HHmm.xml` — same convention as descargas'
  * `descargasFileName`, with the domain keyword this XML actually uses
  * (`ENVIO_LIQUIDA`, see `DATA_TABLE_NAMES` above) instead of `ENVIO_DESCARGA`.
  */
@@ -166,5 +167,5 @@ export function retencionesXmlFileName(date = new Date()): string {
   const stamp =
     `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
     `_${pad(date.getHours())}${pad(date.getMinutes())}`;
-  return `DSEND_ENVIO_LIQUIDA_${stamp}.txt`;
+  return `DSEND_ENVIO_LIQUIDA_${stamp}.xml`;
 }

@@ -80,7 +80,7 @@ const ReviewCharts = dynamic(() => import('./ReviewCharts'), {
   ),
 });
 
-const TXT_MIME = 'text/plain;charset=utf-8';
+const XML_MIME = 'application/xml;charset=utf-8';
 const PREVIEW_LIMIT = 15;
 
 type ReviewTab = 'tabla' | 'graficos';
@@ -561,7 +561,7 @@ export default function SourceUploader() {
     setGenError(null);
     try {
       const xml = buildDescargasXml(mergedRows);
-      downloadBlob(new Blob([xml], { type: TXT_MIME }), descargasFileName());
+      downloadBlob(new Blob([xml], { type: XML_MIME }), descargasFileName());
     } catch (err) {
       setGenError(err instanceof Error ? err.message : String(err));
     }
@@ -869,7 +869,7 @@ export default function SourceUploader() {
               onClick={downloadXml}
             >
               <FileCode2 />
-              Descargar TXT{rowCount ? ` (${rowCount})` : ''}
+              Descargar XML{rowCount ? ` (${rowCount})` : ''}
             </Button>
 
             {canGenerate && (

@@ -30,7 +30,7 @@ const rec = (i: number): RetencionXmlInput => ({
 });
 
 const CABEZAL_1 = `<SubTask_SELECT_ENVIO_CABEZAL_001>
-<CONTINTERNO></CONTINTERNO>
+<CONTINTERNO>126080440</CONTINTERNO>
 <CONTRATO>126080440</CONTRATO>
 <ORDENINTER>62997621</ORDENINTER>
 <LIQCORRELDGI>200000490341</LIQCORRELDGI>
@@ -147,6 +147,7 @@ describe('buildXml', () => {
     // all carrying that record's value.
     const xml = buildXml([rec(1)]);
     expect(xml).toContain('<CONTRATO>126080440</CONTRATO>');
+    expect(xml).toContain('<CONTINTERNO>126080440</CONTINTERNO>');
     const ordenInter = xml.match(/<ORDENINTER>62997621<\/ORDENINTER>/g);
     expect(ordenInter).toHaveLength(3);
     expect(xml).not.toContain('<ORDENINTER></ORDENINTER>');
@@ -154,8 +155,8 @@ describe('buildXml', () => {
 
   it('never self-closes empty tags and never pretty-prints', () => {
     const xml = buildXml([rec(1)]);
-    expect(xml).toContain('<CONTINTERNO></CONTINTERNO>');
-    expect(xml).not.toContain('<CONTINTERNO/>');
+    expect(xml).toContain('<NROCAI></NROCAI>');
+    expect(xml).not.toContain('<NROCAI/>');
     expect(xml).toContain('<OBSERVACION> </OBSERVACION>');
     // adjacent CABEZAL/CUERPO of same kind are glued, one newline between groups
     expect(xml).toContain(

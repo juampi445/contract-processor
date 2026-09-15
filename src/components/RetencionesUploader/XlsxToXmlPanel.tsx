@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 
-const TXT_MIME = 'text/plain;charset=utf-8';
+const XML_MIME = 'application/xml;charset=utf-8';
 
 /**
  * Standalone flow: take one filled XLSX (produced earlier by this tool,
@@ -63,7 +63,7 @@ export default function XlsxToXmlPanel() {
     setIsGenerating(true);
     try {
       const xml = buildXml(result.rows);
-      const blob = new Blob([xml], { type: TXT_MIME });
+      const blob = new Blob([xml], { type: XML_MIME });
       downloadBlob(blob, retencionesXmlFileName());
     } catch (err) {
       setGenError(err instanceof Error ? err.message : String(err));
@@ -90,11 +90,11 @@ export default function XlsxToXmlPanel() {
         </span>
         <div>
           <h2 className="text-sm font-semibold tracking-tight text-foreground">
-            Convertir un Excel a TXT
+            Convertir un Excel a XML
           </h2>
           <p className="mt-1 max-w-[62ch] text-sm text-muted-foreground">
             Subí un Excel ya generado por esta herramienta (podés haberlo
-            editado a mano) y descargá el TXT. No necesita PDFs.
+            editado a mano) y descargá el XML. No necesita PDFs.
           </p>
         </div>
       </div>
@@ -184,7 +184,7 @@ export default function XlsxToXmlPanel() {
             )}
             {isGenerating
               ? 'Generando…'
-              : `Descargar TXT${validCount ? ` (${validCount})` : ''}`}
+              : `Descargar XML${validCount ? ` (${validCount})` : ''}`}
           </Button>
 
           {genError && (

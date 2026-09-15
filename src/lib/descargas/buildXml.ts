@@ -46,11 +46,11 @@ export function buildDescargasXml(rows: DescargaRow[]): string {
   );
 }
 
-/** Build a timestamped filename: `DSEND_ENVIO_DESCARGA_yyyy-MM-dd_HHmm.txt`. */
+/** Build a timestamped filename: `DSEND_ENVIO_DESCARGA_yyyy-MM-dd_HHmm.xml`. */
 export function descargasFileName(date = new Date()): string {
   const pad = (n: number): string => String(n).padStart(2, '0');
   const stamp =
     `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
     `_${pad(date.getHours())}${pad(date.getMinutes())}`;
-  return `DSEND_ENVIO_DESCARGA_${stamp}.txt`;
+  return `DSEND_ENVIO_DESCARGA_${stamp}.xml`;
 }

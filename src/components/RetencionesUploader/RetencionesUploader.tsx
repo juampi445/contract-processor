@@ -36,7 +36,7 @@ import {
 import { cn } from '@/lib/utils';
 import XlsxToXmlPanel from './XlsxToXmlPanel';
 
-const TXT_MIME = 'text/plain;charset=utf-8';
+const XML_MIME = 'application/xml;charset=utf-8';
 const PARSE_CONCURRENCY = 3;
 
 /** Focused preview: the fields that come from the PDF, in a friendly order. */
@@ -239,7 +239,7 @@ export default function RetencionesUploader() {
           concepto: r.conceptoRetIva,
         })),
       );
-      const blob = new Blob([xml], { type: TXT_MIME });
+      const blob = new Blob([xml], { type: XML_MIME });
       downloadBlob(blob, retencionesXmlFileName());
     } catch (err) {
       setGenError(err instanceof Error ? err.message : String(err));
@@ -252,7 +252,7 @@ export default function RetencionesUploader() {
     <div className="flex min-h-svh flex-col">
       <PageHeader
         title="Retenciones"
-        description="Arrastrá las constancias y descargá el Excel o el TXT."
+        description="Arrastrá las constancias y descargá el Excel o el XML."
       />
 
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-8 p-4 sm:p-6">
@@ -517,7 +517,7 @@ export default function RetencionesUploader() {
                   onClick={generateXml}
                 >
                   <FileCode2 />
-                  Descargar TXT{okCount ? ` (${okCount})` : ''}
+                  Descargar XML{okCount ? ` (${okCount})` : ''}
                 </Button>
               </div>
 

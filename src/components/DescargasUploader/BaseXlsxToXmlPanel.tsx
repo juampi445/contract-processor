@@ -28,7 +28,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-const TXT_MIME = 'text/plain;charset=utf-8';
+const XML_MIME = 'application/xml;charset=utf-8';
 
 /** Columns worth showing in the preview: the required ones plus two useful extras. */
 const PREVIEW_COLS = [...REQUIRED_COLUMNS, 'COMPRADOR', 'CORREDOR'] as const;
@@ -82,7 +82,7 @@ export default function BaseXlsxToXmlPanel() {
     try {
       const generated = buildDescargasXml(result.rows);
       setXml(generated);
-      downloadBlob(new Blob([generated], { type: TXT_MIME }), descargasFileName());
+      downloadBlob(new Blob([generated], { type: XML_MIME }), descargasFileName());
     } catch (err) {
       setGenError(err instanceof Error ? err.message : String(err));
     }
@@ -105,11 +105,11 @@ export default function BaseXlsxToXmlPanel() {
         </span>
         <div>
           <h2 className="text-sm font-semibold tracking-tight text-foreground">
-            Convertir un Excel base a TXT
+            Convertir un Excel base a XML
           </h2>
           <p className="mt-1 max-w-[62ch] text-sm text-muted-foreground">
             Subí un Excel que ya tenga las 15 columnas del formato base (CTG,
-            CPORTE, FECHA…) y descargá el TXT directo. No necesita el paso
+            CPORTE, FECHA…) y descargá el XML directo. No necesita el paso
             anterior.
           </p>
         </div>
@@ -219,7 +219,7 @@ export default function BaseXlsxToXmlPanel() {
 
           <Button type="button" disabled={!canGenerate} onClick={generateAndDownload}>
             <FileCode2 />
-            Descargar TXT{rowCount ? ` (${rowCount})` : ''}
+            Descargar XML{rowCount ? ` (${rowCount})` : ''}
           </Button>
 
           {xml && (
