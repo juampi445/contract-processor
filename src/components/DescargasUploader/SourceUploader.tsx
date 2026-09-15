@@ -25,14 +25,19 @@ import {
   mergeWithManualValues,
 } from '@/lib/descargas/extractSource';
 import { parseQuantity } from '@/lib/descargas/numbers';
+import { toast } from 'sonner';
+import { useCompany } from '@/components/company-provider';
+import { migrateLegacyPresets } from '@/lib/descargas/legacyPresets';
+import { createClient } from '@/lib/supabase/client';
 import {
-  createPreset,
+  deletePreset,
+  fetchPresets,
   loadLastPresetId,
-  loadPresets,
   normalizePresetValues,
   presetValuesEqual,
   saveLastPresetId,
-  savePresets,
+  savePreset,
+  sortPresets,
   type DescargasPreset,
   type DescargasPresetValues,
 } from '@/lib/descargas/presets';
@@ -290,15 +295,11 @@ export default function SourceUploader() {
     setManualValues(normalized.manualValues);
   }, []);
 
-  // localStorage only exists in the browser, so presets and UI prefs load after mount.
+  const { id: companyId } = useCompany();
+  const supabase = useMemo(() => createClient(), []);
+
+  // Browser-only state (UI prefs, step animation) is set up after mount.
   useEffect(() => {
-    const stored = loadPresets();
-    setPresets(stored);
-    const last = stored.find((p) => p.id === loadLastPresetId());
-    if (last) {
-      applyValues(last);
-      setSelectedPresetId(last.id);
-    }
     setLayoutToken((t) => t + 1);
     if (loadPref(REVIEW_TAB_KEY) === 'graficos') setReviewTab('graficos');
     // Two frames: let the steps settle open or closed before enabling animation.
@@ -306,7 +307,32 @@ export default function SourceUploader() {
       frame = requestAnimationFrame(() => setAnimateSteps(true));
     });
     return () => cancelAnimationFrame(frame);
-  }, [applyValues]);
+  }, []);
+
+  // Presets are shared by the whole company; re-apply the one this browser used last.
+  useEffect(() => {
+    let cancelled = false;
+    // Wait for the one-time localStorage import so imported presets show up here too.
+    migrateLegacyPresets(supabase, companyId)
+      .catch(() => 0)
+      .then(() => fetchPresets(supabase, companyId))
+      .then((stored) => {
+        if (cancelled) return;
+        setPresets(stored);
+        const last = stored.find((p) => p.id === loadLastPresetId(companyId));
+        if (last) {
+          applyValues(last);
+          setSelectedPresetId(last.id);
+          setLayoutToken((t) => t + 1);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) toast.error('No se pudieron cargar los presets de la empresa.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, companyId, applyValues]);
 
   const currentValues = useMemo<DescargasPresetValues>(
     () => ({ columnNames, requiredFlags, manualValues }),
@@ -316,15 +342,12 @@ export default function SourceUploader() {
   const isPresetDirty =
     !!selectedPreset && !presetValuesEqual(selectedPreset, currentValues);
 
-  const persistPresets = useCallback(
-    (next: DescargasPreset[], selectedId: string | null) => {
-      const sorted = [...next].sort((a, b) => a.name.localeCompare(b.name, 'es'));
-      setPresets(sorted);
-      setSelectedPresetId(selectedId);
-      saveLastPresetId(selectedId);
-      return savePresets(sorted);
+  const rememberSelection = useCallback(
+    (id: string | null) => {
+      setSelectedPresetId(id);
+      saveLastPresetId(companyId, id);
     },
-    [],
+    [companyId],
   );
 
   const selectPreset = useCallback(
@@ -337,46 +360,46 @@ export default function SourceUploader() {
           manualValues: {},
         },
       );
-      setSelectedPresetId(preset?.id ?? null);
-      saveLastPresetId(preset?.id ?? null);
+      rememberSelection(preset?.id ?? null);
       setLayoutToken((t) => t + 1);
     },
-    [presets, applyValues],
+    [presets, applyValues, rememberSelection],
+  );
+
+  /** Creates or overwrites a preset with the values on screen. */
+  const storePreset = useCallback(
+    async (preset: { id?: string; name: string }) => {
+      const saved = await savePreset(supabase, companyId, { ...preset, values: currentValues });
+      if (!saved) return false;
+      setPresets((prev) => sortPresets([...prev.filter((p) => p.id !== saved.id), saved]));
+      rememberSelection(saved.id);
+      return true;
+    },
+    [supabase, companyId, currentValues, rememberSelection],
   );
 
   const saveAsPreset = useCallback(
     (name: string) => {
       const key = name.trim().toLowerCase();
       const existing = presets.find((p) => p.name.trim().toLowerCase() === key);
-      if (existing) {
-        const replaced = { ...createPreset(name, currentValues), id: existing.id };
-        return persistPresets(
-          presets.map((p) => (p.id === existing.id ? replaced : p)),
-          existing.id,
-        );
-      }
-      const created = createPreset(name, currentValues);
-      return persistPresets([...presets, created], created.id);
+      return storePreset({ id: existing?.id, name });
     },
-    [presets, currentValues, persistPresets],
+    [presets, storePreset],
   );
 
-  const updateSelectedPreset = useCallback(() => {
+  const updateSelectedPreset = useCallback(async () => {
     if (!selectedPreset) return false;
-    const updated = { ...createPreset(selectedPreset.name, currentValues), id: selectedPreset.id };
-    return persistPresets(
-      presets.map((p) => (p.id === selectedPreset.id ? updated : p)),
-      selectedPreset.id,
-    );
-  }, [presets, selectedPreset, currentValues, persistPresets]);
+    return storePreset({ id: selectedPreset.id, name: selectedPreset.name });
+  }, [selectedPreset, storePreset]);
 
-  const deleteSelectedPreset = useCallback(() => {
+  const deleteSelectedPreset = useCallback(async () => {
     if (!selectedPreset) return false;
-    return persistPresets(
-      presets.filter((p) => p.id !== selectedPreset.id),
-      null,
-    );
-  }, [presets, selectedPreset, persistPresets]);
+    const ok = await deletePreset(supabase, companyId, selectedPreset.id);
+    if (!ok) return false;
+    setPresets((prev) => prev.filter((p) => p.id !== selectedPreset.id));
+    rememberSelection(null);
+    return true;
+  }, [supabase, companyId, selectedPreset, rememberSelection]);
 
   const readFile = useCallback(async (file: File) => {
     setFileName(file.name);

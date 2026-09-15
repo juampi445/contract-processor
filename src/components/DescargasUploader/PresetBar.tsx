@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/select';
 
 const NONE = '__none__';
-const STORAGE_ERROR = 'No se pudo guardar en este navegador (¿modo privado o sin espacio?).';
+const STORAGE_ERROR = 'No se pudo guardar el preset. Revisá tu conexión y probá de nuevo.';
 
 type Notice = { kind: 'ok' | 'error'; text: string };
 
@@ -42,10 +42,10 @@ interface PresetBarProps {
   /** The current inputs differ from the selected preset. */
   isDirty: boolean;
   onSelect: (id: string | null) => void;
-  /** Each action returns false when the browser refused to store it. */
-  onSaveAs: (name: string) => boolean;
-  onUpdate: () => boolean;
-  onDelete: () => boolean;
+  /** Each action resolves to false when the company presets couldn't be saved. */
+  onSaveAs: (name: string) => Promise<boolean>;
+  onUpdate: () => Promise<boolean>;
+  onDelete: () => Promise<boolean>;
 }
 
 export default function PresetBar({
@@ -74,8 +74,10 @@ export default function PresetBar({
     return () => clearTimeout(timer);
   }, [notice]);
 
-  const report = (ok: boolean, text: string) =>
+  const report = async (action: Promise<boolean>, text: string) => {
+    const ok = await action.catch(() => false);
     setNotice(ok ? { kind: 'ok', text } : { kind: 'error', text: STORAGE_ERROR });
+  };
 
   const items = [
     { value: NONE, label: 'Sin preset (valores por defecto)' },

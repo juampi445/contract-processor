@@ -2,19 +2,19 @@ import type { Metadata } from 'next';
 import { Geist } from 'next/font/google';
 import './globals.css';
 import { cn } from '@/lib/utils';
+import { PRODUCT_NAME } from '@/components/brand-mark';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
-import { AppSidebar } from '@/components/app-sidebar';
+import { Toaster } from '@/components/ui/sonner';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
   title: {
-    default: 'Coopagro · Gestión de granos',
-    template: '%s · Coopagro',
+    default: PRODUCT_NAME,
+    template: `%s · ${PRODUCT_NAME}`,
   },
   description:
-    'Procesador de constancias de retención: convierte los PDF a Excel y XML, todo en el navegador.',
+    'Procesador de constancias de retención y descargas: convierte PDF y Excel a formatos para el ERP, en el navegador.',
 };
 
 export default function RootLayout({
@@ -25,12 +25,8 @@ export default function RootLayout({
   return (
     <html lang="es" className={cn('dark font-sans', geist.variable)}>
       <body>
-        <TooltipProvider delay={200}>
-          <SidebarProvider>
-            <AppSidebar />
-            <SidebarInset>{children}</SidebarInset>
-          </SidebarProvider>
-        </TooltipProvider>
+        <TooltipProvider delay={200}>{children}</TooltipProvider>
+        <Toaster theme="dark" position="bottom-right" />
       </body>
     </html>
   );

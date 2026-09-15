@@ -1,9 +1,27 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Download, ReceiptText, ShieldCheck } from 'lucide-react';
+import {
+  Check,
+  ChevronsUpDown,
+  Download,
+  LogOut,
+  Plus,
+  ReceiptText,
+  Settings,
+} from 'lucide-react';
+import { useSignOut } from '@/components/auth/sign-out-button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Sidebar,
   SidebarContent,
@@ -17,83 +35,162 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from '@/components/ui/sidebar';
+import { ROLE_LABELS, type CompanyMembership, type CurrentProfile } from '@/lib/auth/types';
+import { initials } from '@/lib/initials';
 
-const NAV_ITEMS = [
-  {
-    title: 'Retenciones',
-    href: '/retenciones',
-    icon: ReceiptText,
-  },
-  {
-    title: 'Descargas',
-    href: '/descargas',
-    icon: Download,
-  },
-] as const;
+interface NavItem {
+  title: string;
+  href: string;
+  icon: typeof ReceiptText;
+}
 
-export function AppSidebar() {
+function NavGroup({ label, items, pathname }: { label: string; items: NavItem[]; pathname: string }) {
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel className="mb-1">{label}</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu className="gap-1">
+          {items.map((item) => (
+            <SidebarMenuItem key={item.href}>
+              <SidebarMenuButton
+                isActive={pathname.startsWith(item.href)}
+                tooltip={item.title}
+                render={<Link href={item.href} />}
+              >
+                <item.icon />
+                <span>{item.title}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
+export function AppSidebar({
+  company,
+  companies,
+  profile,
+}: {
+  company: CompanyMembership;
+  companies: CompanyMembership[];
+  profile: CurrentProfile;
+}) {
   const pathname = usePathname();
+  const { signOut, pending: signingOut } = useSignOut();
+  const base = `/${company.slug}`;
+  const displayName = profile.fullName || profile.email;
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="pt-3">
-        <div className="flex items-center gap-2.5 px-2 py-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/95 p-1">
-            <Image
-              src="/logo-main.png"
-              alt="Coopagro"
-              width={447}
-              height={447}
-              className="size-full object-contain"
-            />
-          </span>
-          <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-            <p className="truncate text-sm font-semibold text-sidebar-foreground">
-              Braulio Ponce
-            </p>
-            <p className="truncate text-xs text-sidebar-foreground/60">
-              Coopagro
-            </p>
-          </div>
-        </div>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <SidebarMenuButton
+                    size="lg"
+                    className="data-popup-open:bg-sidebar-accent data-popup-open:text-sidebar-accent-foreground"
+                  />
+                }
+              >
+                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-xs font-semibold text-primary-foreground">
+                  {initials(company.name)}
+                </span>
+                <span className="grid min-w-0 flex-1 text-left leading-tight">
+                  <span className="truncate font-semibold">{company.name}</span>
+                  <span className="truncate text-xs text-sidebar-foreground/60">
+                    {ROLE_LABELS[company.role]}
+                  </span>
+                </span>
+                <ChevronsUpDown className="ml-auto text-sidebar-foreground/60" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="min-w-60" sideOffset={6}>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Empresas</DropdownMenuLabel>
+                  {companies.map((c) => (
+                    <DropdownMenuItem
+                      key={c.id}
+                      render={<Link href={`/${c.slug}/retenciones`} />}
+                      className="gap-2 py-1.5"
+                    >
+                      <span className="grid size-6 shrink-0 place-items-center rounded-md bg-accent text-[0.625rem] font-semibold text-accent-foreground">
+                        {initials(c.name)}
+                      </span>
+                      <span className="flex-1 truncate">{c.name}</span>
+                      {c.id === company.id && <Check className="text-primary" aria-label="Actual" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem render={<Link href="/onboarding" />} className="gap-2 py-1.5">
+                  <span className="grid size-6 shrink-0 place-items-center rounded-md border border-dashed border-border">
+                    <Plus className="size-3.5" />
+                  </span>
+                  Crear empresa
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
 
       <SidebarSeparator />
 
       <SidebarContent className="pt-2">
-        <SidebarGroup>
-          <SidebarGroupLabel className="mb-1">Herramientas</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-1">
-              {NAV_ITEMS.map((item) => {
-                const isActive = pathname.startsWith(item.href);
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      tooltip={item.title}
-                      render={<Link href={item.href} />}
-                    >
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <NavGroup
+          label="Herramientas"
+          pathname={pathname}
+          items={[
+            { title: 'Retenciones', href: `${base}/retenciones`, icon: ReceiptText },
+            { title: 'Descargas', href: `${base}/descargas`, icon: Download },
+          ]}
+        />
+        <NavGroup
+          label="Empresa"
+          pathname={pathname}
+          items={[{ title: 'Configuración', href: `${base}/settings`, icon: Settings }]}
+        />
       </SidebarContent>
 
       <SidebarSeparator />
 
       <SidebarFooter className="pb-3">
-        <div className="flex items-center gap-2 rounded-md px-2 py-2 text-xs font-medium text-sidebar-foreground/60 group-data-[collapsible=icon]:justify-center">
-          <ShieldCheck className="size-4 shrink-0 text-success" />
-          <span className="group-data-[collapsible=icon]:hidden">
-            100% local, sin servidores
-          </span>
-        </div>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <SidebarMenuButton
+                    size="lg"
+                    className="data-popup-open:bg-sidebar-accent data-popup-open:text-sidebar-accent-foreground"
+                  />
+                }
+              >
+                <Avatar className="rounded-lg after:rounded-lg">
+                  <AvatarFallback className="rounded-lg text-xs">{initials(displayName)}</AvatarFallback>
+                </Avatar>
+                <span className="grid min-w-0 flex-1 text-left leading-tight">
+                  <span className="truncate font-medium">{displayName}</span>
+                  <span className="truncate text-xs text-sidebar-foreground/60">{profile.email}</span>
+                </span>
+                <ChevronsUpDown className="ml-auto text-sidebar-foreground/60" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" className="min-w-56" sideOffset={6}>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="truncate">{profile.email}</DropdownMenuLabel>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={signOut} disabled={signingOut} className="gap-2 py-1.5">
+                  <LogOut />
+                  Cerrar sesión
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
   );

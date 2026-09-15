@@ -1,3 +1,5 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database, Json } from '@/lib/supabase/database.types';
 import {
   BASE_COLUMNS,
   DEFAULT_COLUMN_NAMES,
@@ -25,22 +27,25 @@ export interface DescargasPreset extends DescargasPresetValues {
   updatedAt: number;
 }
 
-const STORAGE_KEY = 'descargas.presets.v1';
-const LAST_ID_KEY = 'descargas.presets.lastId';
+type Client = SupabaseClient<Database>;
 
-/** The preset in use last time, re-applied when the page opens. */
-export function loadLastPresetId(): string | null {
+const LAST_ID_KEY = 'descargas.presets.lastId';
+const PRESET_COLUMNS = 'id, name, config, updated_at';
+
+/** The preset in use last time in this company, re-applied when the page opens. */
+export function loadLastPresetId(companyId: string): string | null {
   try {
-    return localStorage.getItem(LAST_ID_KEY);
+    return localStorage.getItem(`${LAST_ID_KEY}.${companyId}`);
   } catch {
     return null;
   }
 }
 
-export function saveLastPresetId(id: string | null): void {
+export function saveLastPresetId(companyId: string, id: string | null): void {
   try {
-    if (id) localStorage.setItem(LAST_ID_KEY, id);
-    else localStorage.removeItem(LAST_ID_KEY);
+    const key = `${LAST_ID_KEY}.${companyId}`;
+    if (id) localStorage.setItem(key, id);
+    else localStorage.removeItem(key);
   } catch {
     // Remembering the last preset is a convenience; ignore storage failures.
   }
@@ -95,44 +100,64 @@ export function presetValuesEqual(
   );
 }
 
-export function loadPresets(): DescargasPreset[] {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]');
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter(
-        (p): p is DescargasPreset =>
-          !!p && typeof p.id === 'string' && typeof p.name === 'string',
-      )
-      .map((p) => ({
-        id: p.id,
-        name: p.name,
-        updatedAt: typeof p.updatedAt === 'number' ? p.updatedAt : 0,
-        ...normalizePresetValues(p),
-      }));
-  } catch {
-    return [];
-  }
+export function sortPresets(presets: DescargasPreset[]): DescargasPreset[] {
+  return [...presets].sort((a, b) => a.name.localeCompare(b.name, 'es'));
 }
 
-/** Returns false when the browser refuses to store (private mode, quota). */
-export function savePresets(presets: DescargasPreset[]): boolean {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function createPreset(
-  name: string,
-  values: DescargasPresetValues,
-): DescargasPreset {
+function fromRow(row: { id: string; name: string; config: Json; updated_at: string }): DescargasPreset {
+  const config =
+    row.config && typeof row.config === 'object' && !Array.isArray(row.config)
+      ? (row.config as Partial<DescargasPresetValues>)
+      : undefined;
   return {
-    id: crypto.randomUUID(),
-    name: name.trim(),
-    updatedAt: Date.now(),
-    ...normalizePresetValues(values),
+    id: row.id,
+    name: row.name,
+    updatedAt: Date.parse(row.updated_at) || 0,
+    ...normalizePresetValues(config),
   };
+}
+
+/** Presets shared by everyone in the company. Throws when the request fails. */
+export async function fetchPresets(supabase: Client, companyId: string): Promise<DescargasPreset[]> {
+  const { data, error } = await supabase
+    .from('descargas_presets')
+    .select(PRESET_COLUMNS)
+    .eq('company_id', companyId);
+  if (error) throw new Error(error.message);
+  return sortPresets(data.map(fromRow));
+}
+
+/** Creates the preset, or overwrites it when `id` is given. Returns null on failure. */
+export async function savePreset(
+  supabase: Client,
+  companyId: string,
+  preset: { id?: string; name: string; values: DescargasPresetValues },
+): Promise<DescargasPreset | null> {
+  const name = preset.name.trim();
+  const config = normalizePresetValues(preset.values) as unknown as Json;
+
+  const { data, error } = preset.id
+    ? await supabase
+        .from('descargas_presets')
+        .update({ name, config })
+        .eq('id', preset.id)
+        .eq('company_id', companyId)
+        .select(PRESET_COLUMNS)
+        .single()
+    : await supabase
+        .from('descargas_presets')
+        .insert({ company_id: companyId, name, config })
+        .select(PRESET_COLUMNS)
+        .single();
+
+  return error || !data ? null : fromRow(data);
+}
+
+export async function deletePreset(supabase: Client, companyId: string, id: string): Promise<boolean> {
+  const { error, count } = await supabase
+    .from('descargas_presets')
+    .delete({ count: 'exact' })
+    .eq('id', id)
+    .eq('company_id', companyId);
+  return !error && count === 1;
 }
