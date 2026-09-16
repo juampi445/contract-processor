@@ -7,6 +7,14 @@ export interface EmailMessage {
   text: string;
 }
 
+/**
+ * Gmail scores a From address nobody can answer slightly worse, and a bouncing
+ * reply is a bad look anyway. Optional: without it the message is unchanged.
+ */
+function replyTo(): string | undefined {
+  return process.env.EMAIL_REPLY_TO || undefined;
+}
+
 export type SendResult = { ok: true } | { ok: false; reason: string };
 
 /**
@@ -31,6 +39,7 @@ export async function sendEmail(message: EmailMessage): Promise<SendResult> {
       body: JSON.stringify({
         from,
         to: [message.to],
+        reply_to: replyTo(),
         subject: message.subject,
         html: message.html,
         text: message.text,
