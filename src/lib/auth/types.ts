@@ -7,6 +7,8 @@ export interface CompanyMembership {
   id: string;
   slug: string;
   name: string;
+  /** Object path inside the company-logos bucket, or null while unset. */
+  logoPath: string | null;
   role: MemberRole;
 }
 

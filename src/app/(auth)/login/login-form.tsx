@@ -1,17 +1,19 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { AuthSubmit } from '@/components/auth/auth-submit';
+import { FormError } from '@/components/auth/form-error';
 import { PasswordInput } from '@/components/auth/password-input';
-import { Button } from '@/components/ui/button';
-import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { authInputClass } from '@/components/auth/styles';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { authErrorMessage } from '@/lib/auth/errors';
 import { createClient } from '@/lib/supabase/client';
 
 export function LoginForm({ next }: { next: string }) {
   const router = useRouter();
+  const emailRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,6 +31,8 @@ export function LoginForm({ next }: { next: string }) {
     if (error) {
       setError(authErrorMessage(error));
       setPending(false);
+      // Send the user back to the top of the form so the retry starts there.
+      emailRef.current?.focus();
       return;
     }
     // Stay pending until the next page renders.
@@ -37,18 +41,21 @@ export function LoginForm({ next }: { next: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit}>
-      <FieldGroup>
+    <form onSubmit={onSubmit} noValidate>
+      <FieldGroup className="gap-4">
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input
+            ref={emailRef}
             id="email"
             name="email"
             type="email"
+            inputMode="email"
             autoComplete="email"
+            placeholder="vos@empresa.com.ar"
             required
             autoFocus
-            className="h-9"
+            className={authInputClass}
           />
         </Field>
         <Field>
@@ -56,12 +63,9 @@ export function LoginForm({ next }: { next: string }) {
           <PasswordInput id="password" name="password" autoComplete="current-password" required />
         </Field>
 
-        {error && <FieldError>{error}</FieldError>}
+        {error && <FormError>{error}</FormError>}
 
-        <Button type="submit" size="lg" disabled={pending}>
-          {pending && <Loader2 className="animate-spin" />}
-          Ingresar
-        </Button>
+        <AuthSubmit pending={pending}>Ingresar</AuthSubmit>
       </FieldGroup>
     </form>
   );

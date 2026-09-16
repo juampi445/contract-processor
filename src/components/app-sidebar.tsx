@@ -35,6 +35,7 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from '@/components/ui/sidebar';
+import { CompanyAvatar } from '@/components/company-avatar';
 import { ROLE_LABELS, type CompanyMembership, type CurrentProfile } from '@/lib/auth/types';
 import { initials } from '@/lib/initials';
 
@@ -96,9 +97,7 @@ export function AppSidebar({
                   />
                 }
               >
-                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-xs font-semibold text-primary-foreground">
-                  {initials(company.name)}
-                </span>
+                <CompanyAvatar name={company.name} logoPath={company.logoPath} tone="primary" />
                 <span className="grid min-w-0 flex-1 text-left leading-tight">
                   <span className="truncate font-semibold">{company.name}</span>
                   <span className="truncate text-xs text-sidebar-foreground/60">
@@ -116,9 +115,7 @@ export function AppSidebar({
                       render={<Link href={`/${c.slug}/retenciones`} />}
                       className="gap-2 py-1.5"
                     >
-                      <span className="grid size-6 shrink-0 place-items-center rounded-md bg-accent text-[0.625rem] font-semibold text-accent-foreground">
-                        {initials(c.name)}
-                      </span>
+                      <CompanyAvatar name={c.name} logoPath={c.logoPath} size="sm" />
                       <span className="flex-1 truncate">{c.name}</span>
                       {c.id === company.id && <Check className="text-primary" aria-label="Actual" />}
                     </DropdownMenuItem>

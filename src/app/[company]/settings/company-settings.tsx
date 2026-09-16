@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { dbErrorMessage } from '@/lib/auth/errors';
 import type { CompanyMembership } from '@/lib/auth/types';
 import { createClient } from '@/lib/supabase/client';
+import { CompanyLogoField } from './company-logo-field';
 
 export function CompanySettings({
   company,
@@ -59,6 +60,8 @@ export function CompanySettings({
   return (
     <form onSubmit={onSubmit}>
       <FieldGroup>
+        <CompanyLogoField company={company} canEdit={canEdit} />
+
         <Field data-invalid={error ? true : undefined}>
           <FieldLabel htmlFor="settings-company-name">Nombre</FieldLabel>
           <div className="flex max-w-md gap-2">

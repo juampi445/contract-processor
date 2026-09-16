@@ -54,11 +54,17 @@ export const getMyCompanies = cache(async (): Promise<CompanyMembership[]> => {
   const supabase = await getSupabase();
   const { data, error } = await supabase
     .from('memberships')
-    .select('role, companies!inner(id, slug, name)')
+    .select('role, companies!inner(id, slug, name, logo_path)')
     .eq('user_id', user.id);
   if (error) throw new Error(`No se pudieron cargar las empresas: ${error.message}`);
   return data
-    .map((m) => ({ ...m.companies, role: m.role }))
+    .map(({ companies, role }) => ({
+      id: companies.id,
+      slug: companies.slug,
+      name: companies.name,
+      logoPath: companies.logo_path,
+      role,
+    }))
     .sort((a, b) => a.name.localeCompare(b.name, 'es'));
 });
 

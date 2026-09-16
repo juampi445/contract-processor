@@ -23,6 +23,7 @@ type CompanyRow = {
   id: string;
   slug: string;
   name: string;
+  logo_path: string | null;
   created_by: string | null;
   created_at: string;
 };
@@ -65,7 +66,7 @@ export type Database = {
       companies: {
         Row: CompanyRow;
         Insert: never;
-        Update: { name?: string };
+        Update: { name?: string; logo_path?: string | null };
         Relationships: [
           {
             foreignKeyName: 'companies_created_by_fkey';

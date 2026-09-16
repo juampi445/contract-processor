@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { AuthFooter } from '@/components/auth/auth-shell';
+import { authLinkClass } from '@/components/auth/styles';
 import { firstParam, type SearchParams } from '@/lib/search-params';
 import { SignupForm } from './signup-form';
 
@@ -13,15 +15,12 @@ export default async function SignupPage({ searchParams }: { searchParams: Searc
     <>
       <SignupForm invitedEmail={invitedEmail} />
 
-      <p className="mt-8 text-sm text-muted-foreground">
+      <AuthFooter>
         ¿Ya tenés cuenta?{' '}
-        <Link
-          href="/login"
-          className="font-medium text-foreground underline-offset-4 hover:underline"
-        >
+        <Link href="/login" className={authLinkClass}>
           Ingresá
         </Link>
-      </p>
+      </AuthFooter>
     </>
   );
 }

@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { AuthHeading } from '@/components/auth/auth-shell';
+import { ArrowLeft } from 'lucide-react';
+import { AuthFooter, AuthHeading } from '@/components/auth/auth-shell';
 import { SignOutButton } from '@/components/auth/sign-out-button';
+import { authLinkClass } from '@/components/auth/styles';
 import { getMyCompanies, getProfile } from '@/lib/auth/dal';
 import { CreateCompanyForm } from './create-company-form';
 
@@ -15,31 +17,33 @@ export default async function OnboardingPage() {
     <>
       <AuthHeading
         title={firstCompany ? 'Creá tu empresa' : 'Creá otra empresa'}
-        description="Vas a quedar como dueño y vas a poder invitar a tu equipo."
+        description={
+          firstCompany
+            ? 'Vas a quedar como dueño y vas a poder invitar a tu equipo cuando quieras.'
+            : 'Vas a quedar como dueño. Tus otras empresas siguen donde estaban.'
+        }
       />
 
       <CreateCompanyForm />
 
-      <div className="mt-10 flex flex-col gap-4 border-t border-border pt-6 text-sm text-muted-foreground">
+      <AuthFooter className="flex flex-col gap-4">
         {firstCompany ? (
-          <p>
-            ¿Te invitaron a una empresa? Pedile al dueño que invite a{' '}
-            <span className="font-medium text-foreground">{profile.email}</span> y{' '}
-            <Link href="/" className="font-medium text-foreground underline-offset-4 hover:underline">
+          <p className="leading-relaxed text-pretty">
+            ¿Te invitaron? Pedile al dueño que invite a{' '}
+            <span className="font-medium wrap-anywhere text-foreground">{profile.email}</span> y{' '}
+            <Link href="/" className={authLinkClass}>
               volvé a revisar
             </Link>
             .
           </p>
         ) : (
-          <Link
-            href="/select-company"
-            className="font-medium text-foreground underline-offset-4 hover:underline"
-          >
+          <Link href="/select-company" className={`${authLinkClass} inline-flex items-center gap-1.5`}>
+            <ArrowLeft className="size-4" aria-hidden />
             Volver a mis empresas
           </Link>
         )}
-        <SignOutButton size="sm" className="-ml-2 self-start text-muted-foreground" />
-      </div>
+        <SignOutButton size="sm" className="-ml-2.5 self-start text-muted-foreground" />
+      </AuthFooter>
     </>
   );
 }

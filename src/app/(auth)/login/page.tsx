@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { TriangleAlert } from 'lucide-react';
-import { AuthHeading } from '@/components/auth/auth-shell';
+import { AuthFooter, AuthHeading } from '@/components/auth/auth-shell';
+import { authLinkClass } from '@/components/auth/styles';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { safeNextPath } from '@/lib/auth/redirect';
 import { firstParam, type SearchParams } from '@/lib/search-params';
@@ -16,7 +17,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
 
   return (
     <>
-      <AuthHeading title="Ingresá a tu cuenta" />
+      <AuthHeading
+        title="Ingresá a tu cuenta"
+        description="Usá el email con el que te registraste o con el que te invitaron."
+      />
 
       {linkError && (
         <Alert variant="destructive" className="mb-6">
@@ -30,15 +34,12 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
 
       <LoginForm next={next} />
 
-      <p className="mt-8 text-sm text-muted-foreground">
+      <AuthFooter>
         ¿No tenés cuenta?{' '}
-        <Link
-          href="/signup"
-          className="font-medium text-foreground underline-offset-4 hover:underline"
-        >
+        <Link href="/signup" className={authLinkClass}>
           Creá una
         </Link>
-      </p>
+      </AuthFooter>
     </>
   );
 }
