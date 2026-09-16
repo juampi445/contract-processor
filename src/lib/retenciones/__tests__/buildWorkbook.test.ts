@@ -27,7 +27,7 @@ function sheetWithRow(row: RetencionRow = baseRow): ExcelJS.Worksheet {
 describe('applyRows — cell types', () => {
   it('writes each column with the correct type', () => {
     const r = sheetWithRow().getRow(2);
-    expect(typeof r.getCell(3).value).toBe('number'); // C LIQCORRELDGI
+    expect(typeof r.getCell(3).value).toBe('string'); // C LIQCORRELDGI
     expect(r.getCell(4).value).toBeInstanceOf(Date); // D FECHAORIGEN
     expect(r.getCell(5).value).toMatchObject({ formula: 'D2' }); // E FECHAVTO
     expect(typeof r.getCell(6).value).toBe('number'); // F IMPSINIVA
@@ -62,9 +62,14 @@ describe('applyRows — cell types', () => {
     expect(sheetWithRow().getRow(2).getCell(11).value).toBe('3310-09051822');
   });
 
+  it('keeps LIQCORRELDGI as text, preserving leading zeros', () => {
+    const r = sheetWithRow({ ...baseRow, liqCorrelDgi: '000300117798' });
+    expect(r.getRow(2).getCell(3).value).toBe('000300117798');
+  });
+
   it('applies explicit number formats', () => {
     const r = sheetWithRow().getRow(2);
-    expect(r.getCell(3).numFmt).toBe('0');
+    expect(r.getCell(3).numFmt).toBe('@');
     expect(r.getCell(4).numFmt).toBe('dd/mm/yyyy');
     expect(r.getCell(5).numFmt).toBe('dd/mm/yyyy');
     expect(r.getCell(6).numFmt).toBe('General');

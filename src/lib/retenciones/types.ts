@@ -30,14 +30,24 @@ export interface ParseError {
  * or the list of field errors that prevented it.
  */
 export type ParseResult =
-  | { ok: true; row: RetencionRow }
+  | { ok: true; row: RetencionRow; warnings: string[] }
   | { ok: false; errors: ParseError[] };
 
-/** Per-file outcome surfaced in the UI. */
+/**
+ * One certificate's outcome, surfaced in the UI. A single PDF can yield more
+ * than one of these: molinocañuelas prints one certificate per page.
+ *
+ * `warnings` are non-blocking: the row is exportable but something did not add
+ * up (the 5% coherence check, an unknown issuer), so the UI marks it for manual
+ * review instead of dropping it.
+ */
 export interface FileResult {
   id: string;
   fileName: string;
+  /** 1-indexed page this certificate came from, when the PDF had several. */
+  page?: number;
   status: 'ok' | 'error';
   row?: RetencionRow;
   errors?: ParseError[];
+  warnings?: string[];
 }

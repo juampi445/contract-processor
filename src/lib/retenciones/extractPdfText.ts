@@ -27,13 +27,14 @@ function isTextItem(item: TextItem | { type: string }): item is TextItem {
 }
 
 /**
- * Extract the concatenated, normalized text layer of a PDF.
+ * Extract the normalized text layer of a PDF, ONE STRING PER PAGE.
  *
- * All pages are joined into one string and whitespace is collapsed, because
- * the raw item order and newlines from pdf.js are not reliable. Parsing then
- * runs against this single normalized line.
+ * Within a page every item is joined with spaces and whitespace collapsed,
+ * because the raw item order and newlines from pdf.js are not reliable. Pages
+ * are kept apart because some mills (molinocañuelas) print one certificate per
+ * page — see `parseRetencionPages`.
  */
-export async function extractPdfText(file: File): Promise<string> {
+export async function extractPdfPages(file: File): Promise<string[]> {
   const pdfjs = await getPdfjs();
   const data = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjs.getDocument({ data }).promise;
@@ -46,10 +47,16 @@ export async function extractPdfText(file: File): Promise<string> {
       const pageText = content.items
         .map((item) => (isTextItem(item) ? item.str : ''))
         .join(' ');
-      pageTexts.push(pageText);
+      pageTexts.push(pageText.replace(/\s+/g, ' ').trim());
     }
-    return pageTexts.join(' ').replace(/\s+/g, ' ').trim();
+    return pageTexts;
   } finally {
     await pdf.destroy();
   }
+}
+
+/** All pages joined into the single normalized line the parsers consume. */
+export async function extractPdfText(file: File): Promise<string> {
+  const pages = await extractPdfPages(file);
+  return pages.join(' ').replace(/\s+/g, ' ').trim();
 }

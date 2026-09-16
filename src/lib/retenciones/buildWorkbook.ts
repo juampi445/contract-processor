@@ -39,7 +39,8 @@ function toAmountNumber(importe: string): number {
  *   A CONTRATO      string,   when filled in (else left empty for later) —
  *     text, not number: a leading zero ("0123") is part of the value
  *   B ORDENINTER    string,   when filled in (else left empty for later) — same
- *   C LIQCORRELDGI  number,   numFmt '0'
+ *   C LIQCORRELDGI  string,   numFmt '@' — text, not number: it is an
+ *     identifier and several mills pad it with leading zeros ("000300117798")
  *   D FECHAORIGEN   Date,     numFmt 'dd/mm/yyyy'
  *   E FECHAVTO      formula =D{n}, numFmt 'dd/mm/yyyy'
  *   F IMPSINIVA     number,   numFmt 'General'
@@ -62,9 +63,9 @@ export function applyRows(ws: ExcelJS.Worksheet, rows: RetencionRow[]): void {
     if (r.contrato) row.getCell(1).value = r.contrato; // A — text, if filled (keeps leading zeros)
     if (r.ordenInter) row.getCell(2).value = r.ordenInter; // B — text, if filled (keeps leading zeros)
 
-    const c = row.getCell(3); // C — number
-    c.value = Number(r.liqCorrelDgi);
-    c.numFmt = '0';
+    const c = row.getCell(3); // C — text, never a number: "000300117798"
+    c.value = r.liqCorrelDgi;
+    c.numFmt = '@';
 
     const d = row.getCell(4); // D — Date
     d.value = toLocalDate(r.fechaOrigen);

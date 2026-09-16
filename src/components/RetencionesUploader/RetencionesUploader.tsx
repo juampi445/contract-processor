@@ -16,8 +16,8 @@ import {
   retencionesFileName,
 } from '@/lib/retenciones/buildWorkbook';
 import { buildXml, retencionesXmlFileName } from '@/lib/retenciones/buildXml';
-import { extractPdfText } from '@/lib/retenciones/extractPdfText';
-import { parseRetencion } from '@/lib/retenciones/parseRetencion';
+import { extractPdfPages } from '@/lib/retenciones/extractPdfText';
+import { parseRetencionPages } from '@/lib/retenciones/parseDocument';
 import type { FileResult, RetencionRow } from '@/lib/retenciones/types';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -52,12 +52,24 @@ const PREVIEW_COLS: ReadonlyArray<{
   { header: 'Concepto', get: (r) => r.conceptoRetIva },
 ];
 
-/** A file plus its (possibly pending) parse outcome, kept in selection order. */
+/**
+ * A file plus its (possibly pending) parse outcome, kept in selection order.
+ * One file yields one result per certificate — a molinocañuelas PDF carries
+ * several — so the outcome is a list, and the file is in error when any of them
+ * is.
+ */
 interface Entry {
   id: string;
   file: File;
   parsing: boolean;
-  result?: FileResult;
+  results?: FileResult[];
+}
+
+/** The status shown for a file: the worst of its certificates. */
+function entryStatus(entry: Entry): 'parsing' | 'ok' | 'error' {
+  if (entry.parsing) return 'parsing';
+  if (!entry.results?.length) return 'error';
+  return entry.results.some((r) => r.status === 'error') ? 'error' : 'ok';
 }
 
 /** Run `fn` over `items` with a fixed concurrency limit. */
@@ -79,35 +91,34 @@ async function runWithLimit<T>(
   await Promise.all(workers);
 }
 
-/** Parse a single file into a `FileResult`. Never throws. */
-async function parseFile(id: string, file: File): Promise<FileResult> {
-  try {
-    const text = await extractPdfText(file);
-    if (text.trim().length < 50) {
-      return {
-        id,
-        fileName: file.name,
-        status: 'error',
-        errors: [
-          {
-            field: 'text',
-            message: 'PDF sin capa de texto (no soportado, requiere OCR)',
-          },
-        ],
-      };
-    }
-    const parsed = parseRetencion(text);
-    return parsed.ok
-      ? { id, fileName: file.name, status: 'ok', row: parsed.row }
-      : { id, fileName: file.name, status: 'error', errors: parsed.errors };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return {
+/** Parse a single file into one `FileResult` per certificate. Never throws. */
+async function parseFile(id: string, file: File): Promise<FileResult[]> {
+  const fail = (message: string): FileResult[] => [
+    {
       id,
       fileName: file.name,
       status: 'error',
-      errors: [{ field: 'text', message: `No se pudo leer el PDF: ${message}` }],
-    };
+      errors: [{ field: 'text', message }],
+    },
+  ];
+
+  try {
+    const pages = await extractPdfPages(file);
+    if (pages.join(' ').trim().length < 50) {
+      return fail('PDF sin capa de texto (no soportado, requiere OCR)');
+    }
+
+    return parseRetencionPages(pages).map(({ page, result }, i) => ({
+      id: `${id}:${i}`,
+      fileName: file.name,
+      page: page ?? undefined,
+      ...(result.ok
+        ? { status: 'ok' as const, row: result.row, warnings: result.warnings }
+        : { status: 'error' as const, errors: result.errors }),
+    }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return fail(`No se pudo leer el PDF: ${message}`);
   }
 }
 
@@ -125,16 +136,24 @@ export default function RetencionesUploader() {
     );
   }, []);
 
-  /** Edit CONTRATO/ORDENINTER directly in the preview — they never come from the PDF. */
+  /**
+   * Edit CONTRATO/ORDENINTER directly in the preview. ORDENINTER never comes
+   * from the PDF; CONTRATO does on two formats, and is overwritable here.
+   * Keyed by result id, since a file can hold several certificates.
+   */
   const updateRowField = useCallback(
-    (id: string, field: 'contrato' | 'ordenInter', raw: string) => {
+    (resultId: string, field: 'contrato' | 'ordenInter', raw: string) => {
       const value = raw.replace(/\D/g, '');
       setEntries((prev) =>
         prev.map((e) =>
-          e.id === id && e.result?.row
+          e.results?.some((r) => r.id === resultId)
             ? {
                 ...e,
-                result: { ...e.result, row: { ...e.result.row, [field]: value } },
+                results: e.results.map((r) =>
+                  r.id === resultId && r.row
+                    ? { ...r, row: { ...r.row, [field]: value } }
+                    : r,
+                ),
               }
             : e,
         ),
@@ -160,8 +179,8 @@ export default function RetencionesUploader() {
       setEntries((prev) => [...prev, ...newEntries]);
 
       await runWithLimit(newEntries, PARSE_CONCURRENCY, async (entry) => {
-        const result = await parseFile(entry.id, entry.file);
-        patchEntry(entry.id, { parsing: false, result });
+        const results = await parseFile(entry.id, entry.file);
+        patchEntry(entry.id, { parsing: false, results });
       });
     },
     [patchEntry],
@@ -193,19 +212,18 @@ export default function RetencionesUploader() {
     setGenError(null);
   }, []);
 
-  const okEntries = useMemo(
-    () => entries.filter((e) => e.result?.status === 'ok' && e.result.row),
+  /** Every successfully parsed certificate, flattened across files. */
+  const okResults = useMemo(
+    () =>
+      entries.flatMap(
+        (e) => e.results?.filter((r) => r.status === 'ok' && r.row) ?? [],
+      ),
     [entries],
   );
-  const okRows = useMemo(
-    () => okEntries.map((e) => e.result!.row!),
-    [okEntries],
-  );
+  const okRows = useMemo(() => okResults.map((r) => r.row!), [okResults]);
 
   const isParsing = entries.some((e) => e.parsing);
-  const errorCount = entries.filter(
-    (e) => e.result?.status === 'error',
-  ).length;
+  const errorCount = entries.filter((e) => entryStatus(e) === 'error').length;
   const canGenerate =
     !isParsing &&
     okRows.length > 0 &&
@@ -315,9 +333,25 @@ export default function RetencionesUploader() {
 
               <ul className="max-h-[180px] overflow-y-auto">
                 {entries.map((entry, i) => {
-                  const status = entry.parsing
-                    ? 'parsing'
-                    : (entry.result?.status ?? 'error');
+                  const status = entryStatus(entry);
+                  const certificates = entry.results ?? [];
+                  const okHere = certificates.filter(
+                    (r) => r.status === 'ok',
+                  ).length;
+                  const problems = certificates.flatMap((r) => [
+                    ...(r.errors ?? []).map((e) => ({
+                      key: `${r.id}-e-${e.field}`,
+                      page: r.page,
+                      text: `${e.field !== 'text' ? `${e.field}: ` : ''}${e.message}`,
+                      blocking: true,
+                    })),
+                    ...(r.warnings ?? []).map((w, k) => ({
+                      key: `${r.id}-w-${k}`,
+                      page: r.page,
+                      text: w,
+                      blocking: false,
+                    })),
+                  ]);
                   return (
                     <li
                       key={entry.id}
@@ -358,23 +392,29 @@ export default function RetencionesUploader() {
                         </span>
                         {status === 'ok' && (
                           <span className="text-xs text-success">
-                            Listo para exportar
+                            {okHere > 1
+                              ? `${okHere} certificados listos para exportar`
+                              : 'Listo para exportar'}
                           </span>
                         )}
-                        {entry.result?.status === 'error' &&
-                          entry.result.errors && (
-                            <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                              {entry.result.errors.map((err, j) => (
-                                <li
-                                  key={j}
-                                  className="text-xs leading-relaxed text-destructive"
-                                >
-                                  {err.field !== 'text' ? `${err.field}: ` : ''}
-                                  {err.message}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
+                        {problems.length > 0 && (
+                          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                            {problems.map((p) => (
+                              <li
+                                key={p.key}
+                                className={cn(
+                                  'text-xs leading-relaxed',
+                                  p.blocking
+                                    ? 'text-destructive'
+                                    : 'text-muted-foreground',
+                                )}
+                              >
+                                {p.page ? `pág. ${p.page} — ` : ''}
+                                {p.text}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
 
                       <Button
@@ -433,10 +473,15 @@ export default function RetencionesUploader() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {okEntries.map((entry, i) => {
-                    const row = entry.result!.row!;
+                  {okResults.map((result, i) => {
+                    const row = result.row!;
+                    const flagged = (result.warnings?.length ?? 0) > 0;
                     return (
-                      <TableRow key={entry.id}>
+                      <TableRow
+                        key={result.id}
+                        className={cn(flagged && 'bg-muted/50')}
+                        title={result.warnings?.join('\n')}
+                      >
                         <TableCell className="text-right text-muted-foreground tabular-nums">
                           {i + 1}
                         </TableCell>
@@ -444,7 +489,7 @@ export default function RetencionesUploader() {
                           <Input
                             value={row.contrato}
                             onChange={(e) =>
-                              updateRowField(entry.id, 'contrato', e.target.value)
+                              updateRowField(result.id, 'contrato', e.target.value)
                             }
                             inputMode="numeric"
                             placeholder="—"
@@ -455,7 +500,7 @@ export default function RetencionesUploader() {
                           <Input
                             value={row.ordenInter}
                             onChange={(e) =>
-                              updateRowField(entry.id, 'ordenInter', e.target.value)
+                              updateRowField(result.id, 'ordenInter', e.target.value)
                             }
                             inputMode="numeric"
                             placeholder="—"
