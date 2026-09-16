@@ -14,6 +14,7 @@ export type InvitationActionResult =
 const SESSION_EXPIRED = 'Tu sesión venció. Ingresá de nuevo.';
 
 async function deliverInvitation(invitation: {
+  id: string;
   company_id: string;
   email: string;
   role: MemberRole;
@@ -29,8 +30,10 @@ async function deliverInvitation(invitation: {
     companyName: company?.name ?? 'una empresa',
     inviterName: profile.fullName || profile.email,
     role: invitation.role,
-    signupUrl: `${base}/signup?email=${encodeURIComponent(invitation.email)}`,
-    loginUrl: `${base}/login`,
+    // The token is the whole link: it names the company on the page, pins the
+    // address, and lets the account skip email confirmation.
+    acceptUrl: `${base}/signup?invite=${encodeURIComponent(invitation.id)}`,
+    loginUrl: `${base}/login?invite=${encodeURIComponent(invitation.id)}`,
   });
 
   const result = await sendEmail({ to: invitation.email, ...message });
@@ -74,7 +77,7 @@ export async function resendInvitationAction(invitationId: string): Promise<Invi
   const supabase = await getSupabase();
   const { data: invitation } = await supabase
     .from('invitations')
-    .select('company_id, email, role')
+    .select('id, company_id, email, role')
     .eq('id', invitationId)
     .maybeSingle();
   if (!invitation) {

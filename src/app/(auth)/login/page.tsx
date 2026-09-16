@@ -15,6 +15,17 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
   const next = safeNextPath(firstParam(params.next));
   const linkError = firstParam(params.error) === 'link';
 
+  // Someone who came from an invitation and detoured through login must not
+  // lose it: losing the token is what used to drop them into the generic
+  // "create your company" copy.
+  const invite = firstParam(params.invite);
+  const invitedEmail = firstParam(params.email)?.trim().toLowerCase() ?? '';
+  const signupHref = invite
+    ? `/signup?invite=${encodeURIComponent(invite)}`
+    : invitedEmail
+      ? `/signup?email=${encodeURIComponent(invitedEmail)}`
+      : '/signup';
+
   return (
     <>
       <AuthHeading
@@ -32,11 +43,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
         </Alert>
       )}
 
-      <LoginForm next={next} />
+      <LoginForm next={next} defaultEmail={invitedEmail} />
 
       <AuthFooter>
         ¿No tenés cuenta?{' '}
-        <Link href="/signup" className={authLinkClass}>
+        <Link href={signupHref} className={authLinkClass}>
           Creá una
         </Link>
       </AuthFooter>

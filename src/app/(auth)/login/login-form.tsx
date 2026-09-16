@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { authErrorMessage } from '@/lib/auth/errors';
 import { createClient } from '@/lib/supabase/client';
 
-export function LoginForm({ next }: { next: string }) {
+export function LoginForm({ next, defaultEmail = '' }: { next: string; defaultEmail?: string }) {
   const router = useRouter();
   const emailRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState(false);
@@ -53,6 +53,7 @@ export function LoginForm({ next }: { next: string }) {
             inputMode="email"
             autoComplete="email"
             placeholder="vos@empresa.com.ar"
+            defaultValue={defaultEmail}
             required
             autoFocus
             className={authInputClass}

@@ -28,7 +28,7 @@ export function invitationEmail(input: {
   companyName: string;
   inviterName: string;
   role: MemberRole;
-  signupUrl: string;
+  acceptUrl: string;
   loginUrl: string;
 }) {
   const company = singleLine(input.companyName);
@@ -41,7 +41,7 @@ export function invitationEmail(input: {
     `${inviter} te invitó a unirte a ${company} en ${PRODUCT_NAME} como ${role}.`,
     '',
     `Creá tu cuenta con este email para aceptar la invitación:`,
-    input.signupUrl,
+    input.acceptUrl,
     '',
     `Si ya tenés cuenta, ingresá y vas a ver la empresa: ${input.loginUrl}`,
     '',
@@ -70,7 +70,7 @@ export function invitationEmail(input: {
             </tr>
             <tr>
               <td style="padding-bottom:24px;">
-                <a href="${escapeHtml(input.signupUrl)}" style="display:inline-block;background:#9aa83a;color:#1c2208;font-size:14px;font-weight:600;text-decoration:none;padding:10px 18px;border-radius:8px;">Aceptar invitación</a>
+                <a href="${escapeHtml(input.acceptUrl)}" style="display:inline-block;background:#9aa83a;color:#1c2208;font-size:14px;font-weight:600;text-decoration:none;padding:10px 18px;border-radius:8px;">Aceptar invitación</a>
               </td>
             </tr>
             <tr>

@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Lock, MailCheck } from 'lucide-react';
 import { AuthHeading } from '@/components/auth/auth-shell';
 import { AuthSubmit } from '@/components/auth/auth-submit';
@@ -12,8 +13,11 @@ import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { authErrorMessage } from '@/lib/auth/errors';
+import type { PendingInvitation } from '@/lib/auth/invitation';
+import { ROLE_LABELS } from '@/lib/auth/types';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { acceptInvitationAction } from './actions';
 
 const MIN_PASSWORD = 8;
 
@@ -69,7 +73,17 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
-export function SignupForm({ invitedEmail }: { invitedEmail: string }) {
+export function SignupForm({
+  invitation,
+  legacyEmail,
+}: {
+  invitation: PendingInvitation | null;
+  legacyEmail: string;
+}) {
+  const router = useRouter();
+  // Either source locks the email field. Only a token also proves the address,
+  // which is what lets the invited path skip the confirmation email.
+  const invitedEmail = invitation?.email ?? legacyEmail;
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [password, setPassword] = useState('');
@@ -89,6 +103,30 @@ export function SignupForm({ invitedEmail }: { invitedEmail: string }) {
 
     setPending(true);
     setError(null);
+
+    if (invitation) {
+      // The token proves the address, so the account is created server side
+      // already confirmed and the user goes straight in. One email in total.
+      const result = await acceptInvitationAction(invitation.token, fullName, password);
+      if (!result.ok) {
+        setError(result.error);
+        setPending(false);
+        return;
+      }
+      const { error: signInError } = await createClient().auth.signInWithPassword({
+        email: result.email,
+        password,
+      });
+      if (signInError) {
+        setError(authErrorMessage(signInError));
+        setPending(false);
+        return;
+      }
+      // "/" accepts the pending invitation and forwards into the company.
+      router.replace('/');
+      router.refresh();
+      return;
+    }
 
     const { error } = await createClient().auth.signUp({
       email,
@@ -143,9 +181,17 @@ export function SignupForm({ invitedEmail }: { invitedEmail: string }) {
       <AuthHeading
         title={invitedEmail ? 'Aceptá tu invitación' : 'Creá tu cuenta'}
         description={
-          invitedEmail
-            ? 'Elegí una contraseña y entrás directo a la empresa que te invitó.'
-            : 'Después vas a poder crear tu empresa e invitar a tu equipo.'
+          invitation ? (
+            <>
+              Te sumás a{' '}
+              <span className="font-medium text-foreground">{invitation.companyName}</span> como{' '}
+              {ROLE_LABELS[invitation.role].toLowerCase()}. Elegí una contraseña y entrás.
+            </>
+          ) : invitedEmail ? (
+            'Elegí una contraseña y entrás directo a la empresa que te invitó.'
+          ) : (
+            'Después vas a poder crear tu empresa e invitar a tu equipo.'
+          )
         }
       />
 

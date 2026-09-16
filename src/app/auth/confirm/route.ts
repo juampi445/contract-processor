@@ -29,7 +29,12 @@ export async function GET(request: NextRequest) {
     failure = error ? (error.code ?? error.message) : null;
   }
 
-  if (!failure) redirect(next);
+  if (!failure) {
+    // The page at "/" also does this, but a link with ?next= to a deep path
+    // never goes through "/". Doing it here covers every confirmed arrival.
+    await supabase.rpc('accept_pending_invitations');
+    redirect(next);
+  }
 
   console.error(`[auth/confirm] link rejected: ${failure}`);
   redirect('/login?error=link');

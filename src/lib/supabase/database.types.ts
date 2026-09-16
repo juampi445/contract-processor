@@ -145,6 +145,15 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: number;
       };
+      invitation_by_token: {
+        Args: { p_token: string };
+        Returns: {
+          email: string;
+          role: string;
+          company_name: string;
+          company_slug: string;
+        }[];
+      };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
