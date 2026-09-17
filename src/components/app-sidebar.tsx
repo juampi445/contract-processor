@@ -5,12 +5,12 @@ import { usePathname } from 'next/navigation';
 import {
   Check,
   ChevronsUpDown,
-  Download,
   LayoutDashboard,
   LogOut,
   Plus,
   ReceiptText,
   Settings,
+  Truck,
 } from 'lucide-react';
 import { useSignOut } from '@/components/auth/sign-out-button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -46,10 +46,11 @@ interface NavItem {
   icon: typeof ReceiptText;
 }
 
-function NavGroup({ label, items, pathname }: { label: string; items: NavItem[]; pathname: string }) {
+/** A nav group. Without `label` it is the top-level block (the landing). */
+function NavGroup({ label, items, pathname }: { label?: string; items: NavItem[]; pathname: string }) {
   return (
     <SidebarGroup>
-      <SidebarGroupLabel className="mb-1">{label}</SidebarGroupLabel>
+      {label && <SidebarGroupLabel className="mb-1">{label}</SidebarGroupLabel>}
       <SidebarGroupContent>
         <SidebarMenu className="gap-1">
           {items.map((item) => (
@@ -113,7 +114,7 @@ export function AppSidebar({
                   {companies.map((c) => (
                     <DropdownMenuItem
                       key={c.id}
-                      render={<Link href={`/${c.slug}/retenciones`} />}
+                      render={<Link href={`/${c.slug}/dashboard`} />}
                       className="gap-2 py-1.5"
                     >
                       <CompanyAvatar name={c.name} logoPath={c.logoPath} size="sm" />
@@ -138,13 +139,19 @@ export function AppSidebar({
       <SidebarSeparator />
 
       <SidebarContent className="pt-2">
+        {/* The landing: a general overview of the company, above the tools
+            (retenciones today, descargas when it has persistence). */}
+        <NavGroup
+          pathname={pathname}
+          items={[{ title: 'Dashboard', href: `${base}/dashboard`, icon: LayoutDashboard }]}
+        />
         <NavGroup
           label="Herramientas"
           pathname={pathname}
           items={[
-            { title: 'Dashboard', href: `${base}/dashboard`, icon: LayoutDashboard },
             { title: 'Retenciones', href: `${base}/retenciones`, icon: ReceiptText },
-            { title: 'Descargas', href: `${base}/descargas`, icon: Download },
+            // Descarga de camiones, no de archivos: de ahí el camión.
+            { title: 'Descargas', href: `${base}/descargas`, icon: Truck },
           ]}
         />
         <NavGroup

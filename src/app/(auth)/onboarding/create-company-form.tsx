@@ -53,7 +53,7 @@ export function CreateCompanyForm() {
       setPending(false);
       return;
     }
-    router.replace(`/${data.slug}/retenciones`);
+    router.replace(`/${data.slug}/dashboard`);
     router.refresh();
   }
 

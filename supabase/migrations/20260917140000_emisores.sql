@@ -18,6 +18,13 @@
 --
 -- Este archivo ya fue ejecutado en Supabase Studio. Es idempotente: correrlo
 -- de nuevo no crea nada dos veces.
+--
+-- Verificado contra el esquema vivo (PostgREST, 2026-09-17): tablas, columnas,
+-- nullabilidad y FKs de molinos / emisor_cuits y las columnas de la vista
+-- emisor_por_cuit coinciden. Lo que PostgREST no expone (nombres de las
+-- políticas RLS, el unique de molinos.nombre, security_invoker de la vista)
+-- no se pudo comparar: si en producción las políticas tienen otro nombre, este
+-- archivo las crea de nuevo con estos nombres sin borrar las viejas.
 
 create table if not exists public.molinos (
   id uuid primary key default gen_random_uuid(),

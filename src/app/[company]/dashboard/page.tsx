@@ -161,8 +161,8 @@ export default async function DashboardPage({
       .from('retenciones')
       .select('id', { count: 'exact', head: true })
       .eq('company_id', company.id),
-    // The mill catalog (global, small). Names are resolved LIVE, database
-    // first, so naming a mill in Configuración fixes every old row at once.
+    // The mill catalog (global, small). Names are resolved LIVE from it, so
+    // naming a mill in Configuración fixes every old row at once.
     loadEmisorMap(supabase).catch(() => ({})),
   ]);
 
@@ -174,8 +174,10 @@ export default async function DashboardPage({
     id: row.id,
     liquidacion: row.liquidacion,
     liqCorrelDgi: row.liq_correl_dgi,
-    // Database → code table → the snapshot saved at export time → nothing.
-    emisor: resolveEmisorNombre(row.cuit_agente, emisores) ?? row.emisor,
+    // The catalog is the only source of names. The `emisor` snapshot saved
+    // at export time is NOT a fallback: a CUIT the catalog does not know is
+    // "sin identificar" here, exactly as it is in Configuración.
+    emisor: resolveEmisorNombre(row.cuit_agente, emisores),
     cuitAgente: row.cuit_agente,
     fechaOrigen: row.fecha_origen,
     importeCents: toCentsFromNumeric(row.importe),
@@ -207,7 +209,7 @@ export default async function DashboardPage({
     <div className="flex min-h-svh flex-col">
       <PageHeader
         title="Dashboard"
-        description={`Histórico de retenciones · ${company.name}`}
+        description={`Panorama general · ${company.name}`}
       />
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4 sm:p-6 lg:py-8">

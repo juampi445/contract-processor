@@ -98,9 +98,12 @@ describe('saveableResults', () => {
   });
 });
 
+/** The catalog as the tests see it: ACA named, everything else not. */
+const catalog = (cuit: string): string | null => (cuit === '30500120882' ? 'ACA' : null);
+
 describe('toHistorialRecord', () => {
   it('maps a preview row to its database record', () => {
-    expect(toHistorialRecord(result())).toEqual({
+    expect(toHistorialRecord(result(), catalog)).toEqual({
       liquidacion: '3310-09051822',
       liq_correl_dgi: '200000490345',
       emisor: 'ACA',
@@ -117,16 +120,19 @@ describe('toHistorialRecord', () => {
     expect(toHistorialRecord(edited).contrato).toBe('999000111');
   });
 
-  it('leaves emisor null when the CUIT is not a known issuer', () => {
+  it('leaves emisor null when the catalog does not know the CUIT', () => {
     const unknown = result({ row: row({ cuitCorredor: '30710865607' }) });
-    expect(toHistorialRecord(unknown).emisor).toBeNull();
+    expect(toHistorialRecord(unknown, catalog).emisor).toBeNull();
   });
 
-  it('takes the name from the database resolver before the code table', () => {
+  it('never names a row from the code table: without a resolver it is null, even for ACA', () => {
+    expect(toHistorialRecord(result()).emisor).toBeNull();
+  });
+
+  it('takes the name the catalog resolver gives', () => {
     const named = result({ row: row({ cuitCorredor: '30710865607' }) });
     const resolver = (cuit: string) => (cuit === '30710865607' ? 'Molino Nuevo' : null);
     expect(toHistorialRecord(named, resolver).emisor).toBe('Molino Nuevo');
-    // The database wins over issuers.ts for a CUIT that is in both.
     expect(toHistorialRecord(result(), () => 'ACA renombrado').emisor).toBe('ACA renombrado');
   });
 
@@ -148,7 +154,7 @@ describe('toHistorialRecordFromXmlInput', () => {
   };
 
   it('records exactly what the XML carried', () => {
-    expect(toHistorialRecordFromXmlInput(input, 'retenciones.xlsx')).toEqual({
+    expect(toHistorialRecordFromXmlInput(input, 'retenciones.xlsx', catalog)).toEqual({
       liquidacion: '3310-09051822',
       liq_correl_dgi: '200000490345',
       emisor: 'ACA',
@@ -166,8 +172,8 @@ describe('toHistorialRecordFromXmlInput', () => {
   });
 
   it('agrees with the PDF flow for the same values', () => {
-    expect(toHistorialRecordFromXmlInput(input, 'aca.pdf')).toEqual(
-      toHistorialRecord(result()),
+    expect(toHistorialRecordFromXmlInput(input, 'aca.pdf', catalog)).toEqual(
+      toHistorialRecord(result(), catalog),
     );
   });
 });

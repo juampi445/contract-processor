@@ -26,7 +26,7 @@ import { dbErrorMessage } from '@/lib/auth/errors';
 import type { Database, Json } from '@/lib/supabase/database.types';
 import { downloadBlob } from './buildWorkbook';
 import { buildXml, retencionesXmlFileName, type RetencionXmlInput } from './buildXml';
-import { resolveEmisorNombre, type NameResolver } from './emisores';
+import type { NameResolver } from './emisores';
 import { registrosBloqueados, type RegistroBloqueado } from './requeridos';
 import { normalizeFecha, toCents } from './toXmlValues';
 import type { FileResult, RetencionRow } from './types';
@@ -129,14 +129,15 @@ export function toXmlInput(row: RetencionRow): RetencionXmlInput {
  * both flows that produce an XML (the PDF batch and the uploaded Excel) record
  * precisely what they exported, and neither can drift from the other.
  *
- * The name is resolved through `resolveName` (database first, then the code
- * table; see `emisores.ts`) and stored as a snapshot. Display always
- * re-resolves it live, so naming a mill later fixes old rows too.
+ * The name is resolved through `resolveName` (the mill catalog in the
+ * database, see `emisores.ts`) and stored as a snapshot. Without a resolver it
+ * is `null`: the code table never names a row. Display always re-resolves it
+ * live, so naming a mill later fixes old rows too.
  */
 export function toHistorialRecordFromXmlInput(
   input: RetencionXmlInput,
   sourceFilename: string | null,
-  resolveName: NameResolver = (cuit) => resolveEmisorNombre(cuit),
+  resolveName: NameResolver = () => null,
 ): HistorialRecord {
   return {
     liquidacion: input.concepto,

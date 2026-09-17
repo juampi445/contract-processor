@@ -13,11 +13,11 @@ export default async function Home() {
 
   const companies = await getMyCompanies();
   if (companies.length === 0) redirect('/onboarding');
-  if (companies.length === 1) redirect(`/${companies[0].slug}/retenciones`);
+  if (companies.length === 1) redirect(`/${companies[0].slug}/dashboard`);
 
   const last = (await cookies()).get(LAST_COMPANY_COOKIE)?.value;
   const remembered = companies.find((c) => c.slug === last);
-  if (remembered) redirect(`/${remembered.slug}/retenciones`);
+  if (remembered) redirect(`/${remembered.slug}/dashboard`);
 
   redirect('/select-company');
 }

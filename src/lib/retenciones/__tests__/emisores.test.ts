@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatCuit,
   nameResolverFrom,
+  nombreSugerido,
   normalizeCuit,
   resolveEmisorNombre,
   type EmisorMap,
@@ -17,17 +18,19 @@ const db: EmisorMap = {
 };
 
 describe('resolveEmisorNombre', () => {
-  it('reads the database first', () => {
+  it('reads the catalog', () => {
     expect(resolveEmisorNombre('30710123450', db)).toBe('Molino Nuevo SA');
     expect(resolveEmisorNombre('30500120882', db)).toBe('ACA Coop.');
   });
 
-  it('falls back to the code table for a CUIT the database does not have', () => {
-    expect(resolveEmisorNombre('30700869918', db)).toBe('Bunge');
-    expect(resolveEmisorNombre('30700869918')).toBe('Bunge');
+  it('does NOT fall back to the code table: a known mill missing from the catalog is unnamed', () => {
+    // Bunge has rules in issuers.ts, but until someone names it in the
+    // catalog it must show as "sin identificar" so it enters the naming flow.
+    expect(resolveEmisorNombre('30700869918', db)).toBeNull();
+    expect(resolveEmisorNombre('30700869918')).toBeNull();
   });
 
-  it('returns null when neither knows the CUIT: "sin identificar", not an error', () => {
+  it('returns null for a CUIT nobody knows: "sin identificar", not an error', () => {
     expect(resolveEmisorNombre('20123456780', db)).toBeNull();
     expect(resolveEmisorNombre('20123456780')).toBeNull();
   });
@@ -42,11 +45,19 @@ describe('resolveEmisorNombre', () => {
 });
 
 describe('nameResolverFrom', () => {
-  it('closes over the map', () => {
+  it('closes over the map and only the map', () => {
     const resolve = nameResolverFrom(db);
     expect(resolve('30710123450')).toBe('Molino Nuevo SA');
-    expect(resolve('30507950848')).toBe('Molino Cañuelas');
+    expect(resolve('30507950848')).toBeNull(); // Molino Cañuelas in code, not in catalog
     expect(resolve('20123456780')).toBeNull();
+  });
+});
+
+describe('nombreSugerido', () => {
+  it('offers the code-table name to prefill "molino nuevo", and nothing for an unknown CUIT', () => {
+    expect(nombreSugerido('30507950848')).toBe('Molino Cañuelas');
+    expect(nombreSugerido('30-50012088-2')).toBe('ACA');
+    expect(nombreSugerido('20123456780')).toBeNull();
   });
 });
 

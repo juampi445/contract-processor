@@ -2,32 +2,14 @@
 
 import { useMemo, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Loader2, Pencil, Plus, Tag, Trash2, Wheat, X } from 'lucide-react';
+import { Loader2, Pencil, Plus, Tag, Trash2, Wheat, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { ConfirmPopover } from '@/components/confirm-popover';
+import { IdentificarMolinoDialog } from '@/components/identificar-molino-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  asociarCuitAMolino,
-  crearMolinoConCuit,
   eliminarMolino,
   formatCuit,
   quitarCuit,
@@ -37,186 +19,16 @@ import {
 } from '@/lib/retenciones/emisores';
 import { formatIsoDay } from '@/lib/retenciones/dashboard';
 import { createClient } from '@/lib/supabase/client';
-import { cn } from '@/lib/utils';
 
 /**
- * Naming mills. The user's mental model is "this certificate came from
- * somebody — who?", never "map a CUIT to a row": the copy talks about
- * comprobantes and molinos, and the CUIT appears only as the thing that
- * identifies the paper.
+ * Naming mills: the management hub. The identify flow itself lives in
+ * `IdentificarMolinoDialog`, shared with the PDF preview, so both places
+ * behave the same. The user's mental model is "this certificate came from
+ * somebody — who?", never "map a CUIT to a row".
  */
-
-type Modo = 'existente' | 'nuevo';
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : 'No se pudo guardar. Probá de nuevo.';
-}
-
-/** The "¿de quién es este comprobante?" flow: pick a mill, or name a new one. */
-function IdentificarDialog({
-  pendiente,
-  molinos,
-  onClose,
-}: {
-  pendiente: CuitSinIdentificar | null;
-  molinos: MolinoConCuits[];
-  onClose: () => void;
-}) {
-  const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
-  const open = pendiente !== null;
-  const hasMolinos = molinos.length > 0;
-
-  const [modo, setModo] = useState<Modo>(hasMolinos ? 'existente' : 'nuevo');
-  const [molinoId, setMolinoId] = useState<string>(molinos[0]?.id ?? '');
-  const [nombre, setNombre] = useState('');
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Reset when a different certificate is opened. A suggested name (a mill
-  // that has rules in code) is prefilled so confirming it is one click.
-  const [seenCuit, setSeenCuit] = useState<string | null>(null);
-  if (pendiente && pendiente.cuit !== seenCuit) {
-    setSeenCuit(pendiente.cuit);
-    setNombre(pendiente.sugerido ?? '');
-    setModo(pendiente.sugerido || !hasMolinos ? 'nuevo' : 'existente');
-    setMolinoId(molinos[0]?.id ?? '');
-    setError(null);
-  }
-
-  const items = molinos.map((m) => ({ value: m.id, label: m.nombre }));
-  const nombreOk = nombre.trim().length >= 2;
-  const canSubmit = !pending && (modo === 'existente' ? molinoId !== '' : nombreOk);
-
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!pendiente || !canSubmit) return;
-    setPending(true);
-    setError(null);
-    try {
-      if (modo === 'existente') {
-        await asociarCuitAMolino(supabase, pendiente.cuit, molinoId);
-        const molino = molinos.find((m) => m.id === molinoId);
-        toast.success(`Listo: ese comprobante es de ${molino?.nombre ?? 'ese molino'}.`);
-      } else {
-        const molino = await crearMolinoConCuit(supabase, nombre, pendiente.cuit);
-        toast.success(`Molino "${molino.nombre}" creado e identificado.`);
-      }
-      onClose();
-      router.refresh();
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(next) => !next && !pending && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <form onSubmit={onSubmit} className="contents">
-          <DialogHeader>
-            <DialogTitle>¿De quién es este comprobante?</DialogTitle>
-            <DialogDescription>
-              {pendiente && (
-                <>
-                  El agente de retención figura con el CUIT{' '}
-                  <span className="font-medium text-foreground tabular-nums">
-                    {formatCuit(pendiente.cuit)}
-                  </span>
-                  . Decinos qué molino es y lo usamos para este y los próximos
-                  comprobantes con ese CUIT.
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          <RadioGroup
-            value={modo}
-            onValueChange={(value) => setModo(value as Modo)}
-            className="gap-2"
-            aria-label="Cómo identificarlo"
-          >
-            <label
-              className={cn(
-                'flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors',
-                modo === 'existente' && 'border-primary/40 bg-primary/5',
-                !hasMolinos && 'cursor-not-allowed opacity-60',
-              )}
-            >
-              <RadioGroupItem value="existente" disabled={!hasMolinos} className="mt-0.5" />
-              <span className="grid min-w-0 flex-1 gap-2">
-                <span className="text-sm font-medium text-foreground">
-                  Es un molino que ya tengo
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {hasMolinos
-                    ? 'El mismo molino puede retener desde más de un CUIT.'
-                    : 'Todavía no cargaste ningún molino.'}
-                </span>
-                {modo === 'existente' && hasMolinos && (
-                  <Select items={items} value={molinoId} onValueChange={(v) => setMolinoId(v ?? '')}>
-                    <SelectTrigger aria-label="Molino" className="h-9 w-full">
-                      <SelectValue placeholder="Elegí el molino" />
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false} sideOffset={6}>
-                      {items.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </span>
-            </label>
-
-            <label
-              className={cn(
-                'flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors',
-                modo === 'nuevo' && 'border-primary/40 bg-primary/5',
-              )}
-            >
-              <RadioGroupItem value="nuevo" className="mt-0.5" />
-              <span className="grid min-w-0 flex-1 gap-2">
-                <span className="text-sm font-medium text-foreground">Es un molino nuevo</span>
-                {modo === 'nuevo' && (
-                  <Field data-invalid={error ? true : undefined}>
-                    <Input
-                      value={nombre}
-                      onChange={(e) => setNombre(e.target.value)}
-                      placeholder="Nombre del molino"
-                      autoFocus
-                      maxLength={100}
-                      className="h-9"
-                      aria-label="Nombre del molino"
-                    />
-                    {pendiente?.sugerido && nombre === pendiente.sugerido && (
-                      <FieldDescription className="text-xs">
-                        Nombre sugerido por las reglas de lectura. Podés cambiarlo.
-                      </FieldDescription>
-                    )}
-                  </Field>
-                )}
-              </span>
-            </label>
-          </RadioGroup>
-
-          {error && <FieldError>{error}</FieldError>}
-
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={onClose} disabled={pending}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={!canSubmit}>
-              {pending ? <Loader2 className="animate-spin" /> : <Check />}
-              Identificar
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 /** One mill of the catalog: rename inline, drop a CUIT, delete the mill. */
@@ -386,6 +198,7 @@ export function MolinosSettings({
   pendientes: CuitSinIdentificar[];
   molinos: MolinoConCuits[];
 }) {
+  const router = useRouter();
   const [identificando, setIdentificando] = useState<CuitSinIdentificar | null>(null);
 
   return (
@@ -459,10 +272,10 @@ export function MolinosSettings({
         )}
       </section>
 
-      <IdentificarDialog
+      <IdentificarMolinoDialog
         pendiente={identificando}
-        molinos={molinos}
         onClose={() => setIdentificando(null)}
+        onIdentified={() => router.refresh()}
       />
     </div>
   );

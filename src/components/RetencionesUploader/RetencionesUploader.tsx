@@ -18,7 +18,9 @@ import {
 import {
   loadEmisorMap,
   nameResolverFrom,
+  nombreSugerido,
   resolveEmisorNombre,
+  type CuitAIdentificar,
   type EmisorMap,
 } from '@/lib/retenciones/emisores';
 import { extractPdfPages } from '@/lib/retenciones/extractPdfText';
@@ -35,6 +37,7 @@ import { parseRetencionPages } from '@/lib/retenciones/parseDocument';
 import { registrosBloqueados } from '@/lib/retenciones/requeridos';
 import type { FileResult, RetencionRow } from '@/lib/retenciones/types';
 import { useCompany } from '@/components/company-provider';
+import { IdentificarMolinoDialog } from '@/components/identificar-molino-dialog';
 import { createClient } from '@/lib/supabase/client';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -159,6 +162,8 @@ export default function RetencionesUploader() {
   const [duplicates, setDuplicates] = useState<ExistingExport[] | null>(null);
   /** What the database knows about the CUITs of this batch (see emisores.ts). */
   const [emisores, setEmisores] = useState<EmisorMap>({});
+  /** The certificate whose mill is being named inline, if any. */
+  const [identificando, setIdentificando] = useState<CuitAIdentificar | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const settingsHref = `/${company.slug}/settings#settings-molinos`;
 
@@ -476,7 +481,7 @@ export default function RetencionesUploader() {
                         page: r.page,
                         text:
                           w.code === 'emisor_desconocido'
-                            ? 'Molino sin identificar: el comprobante se procesa y se guarda igual; ponele nombre desde Configuración.'
+                            ? 'Molino sin identificar: el comprobante se procesa y se guarda igual. Tocá "sin identificar" en la vista previa para ponerle nombre.'
                             : w.message,
                         blocking: false,
                       })),
@@ -654,6 +659,12 @@ export default function RetencionesUploader() {
                             nombre={resolveName(row.cuitCorredor)}
                             cuit={row.cuitCorredor}
                             settingsHref={settingsHref}
+                            onIdentify={() =>
+                              setIdentificando({
+                                cuit: row.cuitCorredor,
+                                sugerido: nombreSugerido(row.cuitCorredor),
+                              })
+                            }
                           />
                         </TableCell>
                         {PREVIEW_COLS.map((c) => (
@@ -769,6 +780,16 @@ export default function RetencionesUploader() {
 
         <XlsxToXmlPanel />
       </main>
+
+      {/* Same dialog as Configuración → Molinos. Naming here updates every
+          row of this batch with that CUIT at once, no page reload. */}
+      <IdentificarMolinoDialog
+        pendiente={identificando}
+        onClose={() => setIdentificando(null)}
+        onIdentified={(cuit, identity) =>
+          setEmisores((prev) => ({ ...prev, [cuit]: identity }))
+        }
+      />
 
       <footer className="border-t border-border p-6 text-center text-xs text-muted-foreground">
         <p>Coopagro · IVA Rég. Granos RG AFIP 2300</p>

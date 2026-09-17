@@ -1,17 +1,18 @@
 /**
  * Identidad de los emisores (molinos): quién es el CUIT que retiene.
  *
- * La identidad vive en la base (`molinos` + `emisor_cuits`, leídos por la
- * vista `emisor_por_cuit`) y se resuelve en este orden:
+ * El catálogo es la base, y SOLO la base: `molinos` + `emisor_cuits`, leídos
+ * por la vista `emisor_por_cuit`. Un CUIT que no está ahí queda "sin
+ * identificar": el certificado se procesa y se guarda igual, con su
+ * `cuit_agente`, solo le falta la etiqueta hasta que alguien lo bautiza.
  *
- *  1. la base: el usuario bautizó ese CUIT desde Configuración;
- *  2. `issuers.ts`: el molino tiene reglas propias en código y por lo tanto
- *     un nombre, aunque nadie lo haya cargado todavía;
- *  3. nada: el CUIT queda "sin identificar". El certificado se procesa y se
- *     guarda igual, con su `cuit_agente`; solo le falta la etiqueta.
- *
- * Las reglas de lectura del Nº de certificado (patterns, normalización) NO se
- * mueven acá: son reglas de BIT, no data, y siguen en `issuers.ts`.
+ * `issuers.ts` NO resuelve nombres. Conserva dos roles y nada más: las reglas
+ * de lectura del Nº de certificado (patterns, normalización — reglas de BIT,
+ * no data) y el nombre SUGERIDO con el que se prellena el Dialog de "molino
+ * nuevo" (`nombreSugerido`). Si el código resolviera nombres en silencio, un
+ * CUIT conocido nunca entraría al flujo de bautizar, y eso es justo lo que se
+ * quiere evitar: con la base vacía, los molinos conocidos se ven "sin
+ * identificar" hasta que se confirman con un clic.
  */
 
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
@@ -45,12 +46,21 @@ export type EmisorMap = Readonly<Record<string, EmisorIdentity>>;
 export type NameResolver = (cuit: string) => string | null;
 
 /**
- * Nombre del molino para un CUIT, siguiendo el orden base → código → null.
- * Pura: recibe el mapa ya leído para que la resolución no dependa de I/O.
+ * Nombre del molino para un CUIT, desde el catálogo y nada más. Pura: recibe
+ * el mapa ya leído para que la resolución no dependa de I/O. Sin mapa (o con
+ * un CUIT que no está) devuelve `null`: "sin identificar".
  */
 export function resolveEmisorNombre(cuit: string, emisores: EmisorMap = {}): string | null {
-  const key = normalizeCuit(cuit);
-  return emisores[key]?.nombre ?? ISSUER_NAMES[key] ?? null;
+  return emisores[normalizeCuit(cuit)]?.nombre ?? null;
+}
+
+/**
+ * El nombre que `issuers.ts` conoce para un CUIT con reglas propias. Es una
+ * SUGERENCIA para prellenar el alta de un molino nuevo, nunca el nombre que se
+ * muestra: eso lo decide el catálogo.
+ */
+export function nombreSugerido(cuit: string): string | null {
+  return ISSUER_NAMES[normalizeCuit(cuit)] ?? null;
 }
 
 /** Un `NameResolver` cerrado sobre el mapa de la base. */
@@ -121,18 +131,23 @@ export async function loadMolinos(supabase: Client): Promise<MolinoConCuits[]> {
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 }
 
+/** Lo mínimo que el Dialog de identificar necesita saber de un comprobante. */
+export interface CuitAIdentificar {
+  cuit: string;
+  /** Nombre de `issuers.ts` para prellenar "molino nuevo", si lo hay. */
+  sugerido: string | null;
+}
+
 /**
  * Un CUIT que apareció en el histórico de la empresa y que la base todavía no
  * sabe de quién es. `sugerido` es el nombre de `issuers.ts` cuando el molino
  * tiene reglas en código: se ofrece prellenado para confirmarlo con un click.
  */
-export interface CuitSinIdentificar {
-  cuit: string;
+export interface CuitSinIdentificar extends CuitAIdentificar {
   /** Cuántos certificados de la empresa lo tienen como agente. */
   certificados: number;
   /** Última fecha de certificado vista, `yyyy-mm-dd`. */
   ultimaFecha: string | null;
-  sugerido: string | null;
 }
 
 /**
@@ -169,7 +184,7 @@ export async function loadCuitsSinIdentificar(
     .map(([cuit, stats]) => ({
       cuit,
       ...stats,
-      sugerido: ISSUER_NAMES[cuit] ?? null,
+      sugerido: nombreSugerido(cuit),
     }))
     .sort((a, b) => b.certificados - a.certificados || a.cuit.localeCompare(b.cuit));
 }
