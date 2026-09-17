@@ -12,9 +12,10 @@
 -- dashboard es un solo emisor.
 --
 -- La base arranca VACÍA a propósito: no se siembran los molinos conocidos por
--- código. Mientras un CUIT no esté acá, la app usa el nombre de `issuers.ts`
--- como fallback y, si tampoco está, lo muestra como "sin identificar" para
--- que alguien lo bautice desde Configuración.
+-- código. Este catálogo es la ÚNICA fuente del nombre mostrado: mientras un
+-- CUIT no esté acá, la app lo muestra como "sin identificar" para que alguien
+-- lo bautice (desde la vista previa del PDF o desde Configuración). El nombre
+-- de `issuers.ts` solo se ofrece como sugerencia al dar de alta un molino.
 --
 -- Este archivo ya fue ejecutado en Supabase Studio. Es idempotente: correrlo
 -- de nuevo no crea nada dos veces.
