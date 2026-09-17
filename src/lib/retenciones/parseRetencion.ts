@@ -9,7 +9,7 @@ import {
 } from './fields';
 import { isValidCuit } from './cuit';
 import { ISSUER_NAMES } from './issuers';
-import type { ParseError, ParseResult, RetencionRow } from './types';
+import type { ParseError, ParseResult, ParseWarning, RetencionRow } from './types';
 
 /** Minimum text length below which we treat the PDF as having no text layer. */
 const MIN_TEXT_LENGTH = 50;
@@ -42,7 +42,7 @@ export function parseRetencion(text: string): ParseResult {
   }
 
   const errors: ParseError[] = [];
-  const warnings: string[] = [];
+  const warnings: ParseWarning[] = [];
 
   const conceptoRetIva = extractConceptoRetIva(text);
   if (!conceptoRetIva) {
@@ -118,16 +118,21 @@ export function parseRetencion(text: string): ParseResult {
     const expected = base.num * RATE;
     const drift = Math.abs(impSinIva.num - expected) / expected;
     if (drift > RATE_TOLERANCE) {
-      warnings.push(
-        `Revisar: el retenido (${impSinIva.esAr}) no es el 5% de la base (${base.esAr})`,
-      );
+      warnings.push({
+        code: 'retencion_no_5pct',
+        message: `Revisar: el retenido (${impSinIva.esAr}) no es el 5% de la base (${base.esAr})`,
+      });
     }
   }
 
+  // Only the NAME may be missing here: the data was read with the generic
+  // patterns and is exportable and saveable. Whether the mill has a name is
+  // resolved later (database first, then this same table), not at parse time.
   if (cuitCorredor && !ISSUER_NAMES[cuitCorredor]) {
-    warnings.push(
-      `Revisar: emisor no conocido (CUIT ${cuitCorredor}), campos leídos con reglas genéricas`,
-    );
+    warnings.push({
+      code: 'emisor_desconocido',
+      message: `Revisar: emisor no conocido (CUIT ${cuitCorredor}), campos leídos con reglas genéricas`,
+    });
   }
 
   const row: RetencionRow = {

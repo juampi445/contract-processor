@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import { describe, expect, it } from 'vitest';
 import { readXlsx } from '../readXlsx';
+import { registrosBloqueados } from '../requeridos';
 
 const HEADERS: Record<number, string> = {
   1: 'CONTRATO',
@@ -53,12 +54,44 @@ describe('readXlsx — CONTRATO / ORDENINTER', () => {
     expect(res.rows[0].ordenInter).toBe('62997621');
   });
 
-  it('reports a row missing A, naming the row and the field', async () => {
+  it('reads a row missing A with an empty CONTRATO: the XML step blocks it, not the reader', async () => {
     const { 1: _omitContrato, ...withoutA } = FULL_ROW;
     const res = await readXlsx(await makeFile(withoutA));
+    expect(res.errors).toHaveLength(0);
+    expect(res.rows).toHaveLength(1);
+    expect(res.rows[0].contrato).toBe('');
+    expect(res.rowNumbers).toEqual([2]);
+    expect(registrosBloqueados(res.rows)).toEqual([
+      { index: 0, errores: ['Falta CONTRATO: BIT rechazaría la importación'] },
+    ]);
+  });
+
+  it('still refuses a row missing a PDF-derived column', async () => {
+    const { 3: _omitLiq, ...withoutC } = FULL_ROW;
+    const res = await readXlsx(await makeFile(withoutC));
     expect(res.rows).toHaveLength(0);
     expect(res.errors).toHaveLength(1);
-    expect(res.errors[0].row).toBe(2);
-    expect(res.errors[0].message).toContain('CONTRATO');
+    expect(res.errors[0].message).toContain('LIQCORRELDGI');
+  });
+});
+
+describe('readXlsx — same validations as the parser', () => {
+  it('rejects a CUIT that fails the mod-11 check digit', async () => {
+    const res = await readXlsx(await makeFile({ ...FULL_ROW, 9: 30500120883 }));
+    expect(res.rows).toHaveLength(0);
+    expect(res.errors[0].message).toMatch(/dígito verificador/);
+  });
+
+  it('rejects a comprobante that is not a 3310', async () => {
+    const res = await readXlsx(await makeFile({ ...FULL_ROW, 11: '3320-09051822' }));
+    expect(res.rows).toHaveLength(0);
+    expect(res.errors[0].message).toMatch(/3310/);
+  });
+
+  it('rejects an unreadable date and a zero amount', async () => {
+    const badDate = await readXlsx(await makeFile({ ...FULL_ROW, 4: '2026-06-01' }));
+    expect(badDate.errors[0].message).toMatch(/FECHAORIGEN/);
+    const zero = await readXlsx(await makeFile({ ...FULL_ROW, 6: '0' }));
+    expect(zero.errors[0].message).toMatch(/mayor a cero/);
   });
 });

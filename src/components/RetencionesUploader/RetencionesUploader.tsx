@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Check,
@@ -15,10 +15,27 @@ import {
   downloadBlob,
   retencionesFileName,
 } from '@/lib/retenciones/buildWorkbook';
-import { buildXml, retencionesXmlFileName } from '@/lib/retenciones/buildXml';
+import {
+  loadEmisorMap,
+  nameResolverFrom,
+  resolveEmisorNombre,
+  type EmisorMap,
+} from '@/lib/retenciones/emisores';
 import { extractPdfPages } from '@/lib/retenciones/extractPdfText';
+import {
+  exportXmlBatch,
+  findExistingExports,
+  isUnreliable,
+  toXmlInput,
+  XmlBloqueadoError,
+  type ExistingExport,
+  type XmlBatchItem,
+} from '@/lib/retenciones/historial';
 import { parseRetencionPages } from '@/lib/retenciones/parseDocument';
+import { registrosBloqueados } from '@/lib/retenciones/requeridos';
 import type { FileResult, RetencionRow } from '@/lib/retenciones/types';
+import { useCompany } from '@/components/company-provider';
+import { createClient } from '@/lib/supabase/client';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardTitle } from '@/components/ui/card';
@@ -34,9 +51,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import {
+  BlockedNotice,
+  DuplicateWarning,
+  EmisorLabel,
+  SaveIndicator,
+  type SaveState,
+} from './HistorialFeedback';
 import XlsxToXmlPanel from './XlsxToXmlPanel';
 
-const XML_MIME = 'application/xml;charset=utf-8';
 const PARSE_CONCURRENCY = 3;
 
 /** Focused preview: the fields that come from the PDF, in a friendly order. */
@@ -123,12 +146,21 @@ async function parseFile(id: string, file: File): Promise<FileResult[]> {
 }
 
 export default function RetencionesUploader() {
+  const company = useCompany();
+  const supabase = useMemo(() => createClient(), []);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [skipFailed, setSkipFailed] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>({ status: 'idle' });
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
+  /** Liquidaciones of this batch already on file, awaiting the user's call. */
+  const [duplicates, setDuplicates] = useState<ExistingExport[] | null>(null);
+  /** What the database knows about the CUITs of this batch (see emisores.ts). */
+  const [emisores, setEmisores] = useState<EmisorMap>({});
   const inputRef = useRef<HTMLInputElement>(null);
+  const settingsHref = `/${company.slug}/settings#settings-molinos`;
 
   const patchEntry = useCallback((id: string, patch: Partial<Entry>) => {
     setEntries((prev) =>
@@ -210,6 +242,8 @@ export default function RetencionesUploader() {
   const clearAll = useCallback(() => {
     setEntries([]);
     setGenError(null);
+    setSaveState({ status: 'idle' });
+    setDuplicates(null);
   }, []);
 
   /** Every successfully parsed certificate, flattened across files. */
@@ -221,6 +255,38 @@ export default function RetencionesUploader() {
     [entries],
   );
   const okRows = useMemo(() => okResults.map((r) => r.row!), [okResults]);
+
+  /**
+   * Resolve the mills of this batch as soon as their CUITs are known:
+   * database first, then the code table. Keyed on the sorted CUIT list so a
+   * re-render or an edit to CONTRATO does not trigger another read.
+   */
+  const cuitKey = useMemo(
+    () => [...new Set(okRows.map((r) => r.cuitCorredor))].sort().join(','),
+    [okRows],
+  );
+  useEffect(() => {
+    if (!cuitKey) return;
+    let cancelled = false;
+    loadEmisorMap(supabase, cuitKey.split(','))
+      .then((map) => {
+        if (!cancelled) setEmisores((prev) => ({ ...prev, ...map }));
+      })
+      .catch(() => {
+        // Names are a courtesy; without them the rows show as "sin identificar".
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cuitKey, supabase]);
+
+  const resolveName = useMemo(() => nameResolverFrom(emisores), [emisores]);
+
+  /** Rows the XML cannot carry yet (missing CONTRATO / ORDENINTER, etc.). */
+  const bloqueados = useMemo(
+    () => registrosBloqueados(okRows.map(toXmlInput)),
+    [okRows],
+  );
 
   const isParsing = entries.some((e) => e.parsing);
   const errorCount = entries.filter((e) => entryStatus(e) === 'error').length;
@@ -243,26 +309,77 @@ export default function RetencionesUploader() {
     }
   }, [okRows]);
 
-  const generateXml = useCallback(() => {
+  /**
+   * Generate the XML through the one shared path (`exportXmlBatch`): validate
+   * the required fields, download, record in the histórico. A row flagged as
+   * unreliable (not 5% of the base) still goes into the XML — that is the
+   * user's call — but is not saved. A missing name never holds a row back.
+   */
+  const exportXmlAndSave = useCallback(async () => {
     setGenError(null);
+    setDuplicates(null);
+
+    const items: XmlBatchItem[] = okResults.map((result) => ({
+      input: toXmlInput(result.row!),
+      sourceFilename: result.fileName || null,
+      saveable: !isUnreliable(result),
+    }));
+
+    setSaveState({ status: 'saving' });
     try {
-      const xml = buildXml(
-        okRows.map((r) => ({
-          contrato: r.contrato,
-          ordenInter: r.ordenInter,
-          liqCorrelDgi: r.liqCorrelDgi,
-          fecha: r.fechaOrigen,
-          importe: r.impSinIva,
-          cuitCorredor: r.cuitCorredor,
-          concepto: r.conceptoRetIva,
-        })),
+      const outcome = await exportXmlBatch(supabase, company.id, items, resolveName);
+      setSaveState(
+        outcome.saveError
+          ? { status: 'error', message: outcome.saveError }
+          : {
+              status: 'saved',
+              saved: outcome.saved,
+              updated: outcome.updated,
+              skipped: outcome.skipped,
+            },
       );
-      const blob = new Blob([xml], { type: XML_MIME });
-      downloadBlob(blob, retencionesXmlFileName());
     } catch (err) {
-      setGenError(err instanceof Error ? err.message : String(err));
+      setSaveState({ status: 'idle' });
+      setGenError(
+        err instanceof XmlBloqueadoError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : String(err),
+      );
     }
-  }, [okRows]);
+  }, [okResults, supabase, company.id, resolveName]);
+
+  /**
+   * The net against double-loading into BIT: before exporting, look up which
+   * liquidaciones of this batch are already on file and say so. It does not
+   * prevent the export — the user confirms and it goes through — it only makes
+   * sure a re-export is a decision instead of an accident.
+   */
+  const generateXml = useCallback(async () => {
+    setGenError(null);
+    setSaveState({ status: 'idle' });
+
+    setIsCheckingDuplicates(true);
+    let existing: ExistingExport[] = [];
+    try {
+      existing = await findExistingExports(
+        supabase,
+        company.id,
+        okRows.map((r) => r.conceptoRetIva),
+      );
+    } catch {
+      // The check is a courtesy. If it fails, exporting still has to work.
+    } finally {
+      setIsCheckingDuplicates(false);
+    }
+
+    if (existing.length > 0) {
+      setDuplicates(existing);
+      return;
+    }
+    await exportXmlAndSave();
+  }, [supabase, company.id, okRows, exportXmlAndSave]);
 
   const okCount = okRows.length;
 
@@ -345,12 +462,24 @@ export default function RetencionesUploader() {
                       text: `${e.field !== 'text' ? `${e.field}: ` : ''}${e.message}`,
                       blocking: true,
                     })),
-                    ...(r.warnings ?? []).map((w, k) => ({
-                      key: `${r.id}-w-${k}`,
-                      page: r.page,
-                      text: w,
-                      blocking: false,
-                    })),
+                    ...(r.warnings ?? [])
+                      // A mill that has a name (from the database or the
+                      // code table) is not "unknown" to the user: only the
+                      // generic-rules note is left, and only when nameless.
+                      .filter(
+                        (w) =>
+                          w.code !== 'emisor_desconocido' ||
+                          resolveEmisorNombre(r.row?.cuitCorredor ?? '', emisores) === null,
+                      )
+                      .map((w, k) => ({
+                        key: `${r.id}-w-${k}`,
+                        page: r.page,
+                        text:
+                          w.code === 'emisor_desconocido'
+                            ? 'Molino sin identificar: el comprobante se procesa y se guarda igual; ponele nombre desde Configuración.'
+                            : w.message,
+                        blocking: false,
+                      })),
                   ]);
                   return (
                     <li
@@ -459,6 +588,9 @@ export default function RetencionesUploader() {
                     <TableHead className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                       Orden inter
                     </TableHead>
+                    <TableHead className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                      Molino
+                    </TableHead>
                     {PREVIEW_COLS.map((c) => (
                       <TableHead
                         key={c.header}
@@ -475,12 +607,22 @@ export default function RetencionesUploader() {
                 <TableBody>
                   {okResults.map((result, i) => {
                     const row = result.row!;
-                    const flagged = (result.warnings?.length ?? 0) > 0;
+                    const unreliable = isUnreliable(result);
+                    const blocked = bloqueados.find((b) => b.index === i);
                     return (
                       <TableRow
                         key={result.id}
-                        className={cn(flagged && 'bg-muted/50')}
-                        title={result.warnings?.join('\n')}
+                        className={cn(
+                          unreliable && 'bg-warning/5',
+                          blocked && 'bg-destructive/5',
+                        )}
+                        title={
+                          blocked
+                            ? blocked.errores.join('\n')
+                            : unreliable
+                              ? result.warnings?.map((w) => w.message).join('\n')
+                              : undefined
+                        }
                       >
                         <TableCell className="text-right text-muted-foreground tabular-nums">
                           {i + 1}
@@ -505,6 +647,13 @@ export default function RetencionesUploader() {
                             inputMode="numeric"
                             placeholder="—"
                             className="h-8 w-28"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <EmisorLabel
+                            nombre={resolveName(row.cuitCorredor)}
+                            cuit={row.cuitCorredor}
+                            settingsHref={settingsHref}
                           />
                         </TableCell>
                         {PREVIEW_COLS.map((c) => (
@@ -558,13 +707,49 @@ export default function RetencionesUploader() {
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={okCount === 0 || isParsing || isGenerating}
-                  onClick={generateXml}
+                  disabled={
+                    okCount === 0 ||
+                    isParsing ||
+                    isGenerating ||
+                    isCheckingDuplicates ||
+                    bloqueados.length > 0 ||
+                    saveState.status === 'saving'
+                  }
+                  onClick={() => void generateXml()}
                 >
-                  <FileCode2 />
+                  {isCheckingDuplicates || saveState.status === 'saving' ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <FileCode2 />
+                  )}
                   Descargar XML{okCount ? ` (${okCount})` : ''}
                 </Button>
               </div>
+
+              {okCount > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  El XML es el que se importa a BIT: al descargarlo, el lote queda
+                  guardado en el histórico. El Excel es solo una copia de trabajo y
+                  se puede descargar incompleto.
+                </p>
+              )}
+
+              {okCount > 0 && (
+                <BlockedNotice
+                  bloqueados={bloqueados}
+                  label={(index) => `Fila ${index + 1} de la vista previa`}
+                />
+              )}
+
+              {duplicates && (
+                <DuplicateWarning
+                  duplicates={duplicates}
+                  onCancel={() => setDuplicates(null)}
+                  onConfirm={() => void exportXmlAndSave()}
+                />
+              )}
+
+              <SaveIndicator state={saveState} />
 
               {genError && (
                 <p className="flex items-center gap-1.5 text-sm text-destructive" role="alert">
@@ -586,7 +771,13 @@ export default function RetencionesUploader() {
       </main>
 
       <footer className="border-t border-border p-6 text-center text-xs text-muted-foreground">
-        Coopagro · IVA Rég. Granos RG AFIP 2300
+        <p>Coopagro · IVA Rég. Granos RG AFIP 2300</p>
+        <p className="mx-auto mt-1.5 max-w-xl text-pretty">
+          Los PDF no se guardan ni salen de tu navegador: se leen acá y se
+          descargan acá. Del XML que se importa a BIT queda el registro de lo
+          procesado — los datos del certificado — para el histórico y los
+          reportes de tu empresa.
+        </p>
       </footer>
     </div>
   );

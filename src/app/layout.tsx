@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     template: `%s · ${PRODUCT_NAME}`,
   },
   description:
-    'Procesador de constancias de retención y descargas: convierte PDF y Excel a formatos para el ERP, en el navegador.',
+    'Constancias de retención y descargas: los documentos se convierten a los formatos del ERP en el navegador, y queda el registro de lo procesado para el histórico y los reportes.',
 };
 
 export default function RootLayout({

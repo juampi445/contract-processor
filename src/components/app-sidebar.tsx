@@ -6,6 +6,7 @@ import {
   Check,
   ChevronsUpDown,
   Download,
+  LayoutDashboard,
   LogOut,
   Plus,
   ReceiptText,
@@ -141,6 +142,7 @@ export function AppSidebar({
           label="Herramientas"
           pathname={pathname}
           items={[
+            { title: 'Dashboard', href: `${base}/dashboard`, icon: LayoutDashboard },
             { title: 'Retenciones', href: `${base}/retenciones`, icon: ReceiptText },
             { title: 'Descargas', href: `${base}/descargas`, icon: Download },
           ]}

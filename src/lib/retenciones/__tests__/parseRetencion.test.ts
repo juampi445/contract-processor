@@ -150,7 +150,8 @@ describe('parseRetencion — safe degradation', () => {
     );
     const result = parseRetencion(broken);
     if (!result.ok) throw new Error('expected ok');
-    expect(result.warnings.join(' ')).toMatch(/no es el 5%/);
+    expect(result.warnings.map((w) => w.code)).toEqual(['retencion_no_5pct']);
+    expect(result.warnings.map((w) => w.message).join(' ')).toMatch(/no es el 5%/);
   });
 
   it('flags an unknown issuer instead of failing', () => {
@@ -158,6 +159,7 @@ describe('parseRetencion — safe degradation', () => {
     const unknown = TEXT.replace(/30-50012088-\s?2/g, '30-71012345-0');
     const result = parseRetencion(unknown);
     if (!result.ok) throw new Error('expected ok');
-    expect(result.warnings.join(' ')).toMatch(/emisor no conocido/);
+    expect(result.warnings.map((w) => w.code)).toEqual(['emisor_desconocido']);
+    expect(result.warnings.map((w) => w.message).join(' ')).toMatch(/emisor no conocido/);
   });
 });

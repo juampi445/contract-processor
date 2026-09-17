@@ -2,8 +2,10 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { getSupabase, requireCompany, requireUser } from '@/lib/auth/dal';
+import { loadCuitsSinIdentificar, loadMolinos } from '@/lib/retenciones/emisores';
 import { CompanySettings } from './company-settings';
 import { MembersSettings, type Invitation, type Member } from './members-settings';
+import { MolinosSettings } from './molinos-settings';
 
 export const metadata: Metadata = { title: 'Configuración' };
 
@@ -43,11 +45,15 @@ export default async function SettingsPage({ params }: { params: Promise<{ compa
   ]);
   const isOwner = company.role === 'owner';
 
-  const { data: memberRows, error: membersError } = await supabase
-    .from('memberships')
-    .select('user_id, role, created_at, profiles(email, full_name)')
-    .eq('company_id', company.id)
-    .order('created_at');
+  const [{ data: memberRows, error: membersError }, molinos, pendientes] = await Promise.all([
+    supabase
+      .from('memberships')
+      .select('user_id, role, created_at, profiles(email, full_name)')
+      .eq('company_id', company.id)
+      .order('created_at'),
+    loadMolinos(supabase),
+    loadCuitsSinIdentificar(supabase, company.id),
+  ]);
   if (membersError) throw new Error(`No se pudieron cargar los miembros: ${membersError.message}`);
 
   const members: Member[] = memberRows.map((m) => ({
@@ -79,6 +85,14 @@ export default async function SettingsPage({ params }: { params: Promise<{ compa
           description="Datos que ven todos los miembros."
         >
           <CompanySettings company={company} canEdit={isOwner} />
+        </SettingsSection>
+
+        <SettingsSection
+          id="settings-molinos"
+          title="Molinos"
+          description="De quién es cada comprobante. Identificá los que aparecen sin nombre y ordená los molinos que ya tenés."
+        >
+          <MolinosSettings pendientes={pendientes} molinos={molinos} />
         </SettingsSection>
 
         <SettingsSection
