@@ -12,9 +12,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { EmisorLabel } from '@/components/RetencionesUploader/HistorialFeedback';
+import { IdentificarMolinoProvider } from '@/components/molinos/identificar-molino-dialog';
+import { MolinoLabel } from '@/components/molinos/molino-label';
 import { getSupabase, requireCompany } from '@/lib/auth/dal';
-import { loadEmisorMap, resolveEmisorNombre } from '@/lib/retenciones/emisores';
+import { loadMolinoMap, resolveMolinoNombre } from '@/lib/molinos/molinos';
 import {
   computeKpis,
   filterByRange,
@@ -163,7 +164,7 @@ export default async function DashboardPage({
       .eq('company_id', company.id),
     // The mill catalog (global, small). Names are resolved LIVE from it, so
     // naming a mill in Configuración fixes every old row at once.
-    loadEmisorMap(supabase).catch(() => ({})),
+    loadMolinoMap(supabase).catch(() => ({})),
   ]);
 
   if (error) {
@@ -176,8 +177,8 @@ export default async function DashboardPage({
     liqCorrelDgi: row.liq_correl_dgi,
     // The catalog is the only source of names. The `emisor` snapshot saved
     // at export time is NOT a fallback: a CUIT the catalog does not know is
-    // "sin identificar" here, exactly as it is in Configuración.
-    emisor: resolveEmisorNombre(row.cuit_agente, emisores),
+    // "sin identificar" here, exactly as it is in Molinos.
+    emisor: resolveMolinoNombre(row.cuit_agente, emisores),
     cuitAgente: row.cuit_agente,
     fechaOrigen: row.fecha_origen,
     importeCents: toCentsFromNumeric(row.importe),
@@ -194,7 +195,7 @@ export default async function DashboardPage({
   const monthly = monthlyTotals(inRange, range);
   const byEmisor = totalsByEmisor(inRange);
   const sinIdentificar = byEmisor.filter((e) => e.sinIdentificar);
-  const settingsHref = `/${company.slug}/settings#settings-molinos`;
+  const molinosHref = `/${company.slug}/molinos`;
 
   const needle = search.toLowerCase();
   const tableRows = (
@@ -213,6 +214,9 @@ export default async function DashboardPage({
       />
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4 sm:p-6 lg:py-8">
+        {/* One identify dialog for the whole screen: the table's marks and the
+            grey bars open it, and a refresh re-resolves every row live. */}
+        <IdentificarMolinoProvider>
         {totalCount === 0 ? (
           <EmptyHistory companySlug={company.slug} />
         ) : (
@@ -271,12 +275,14 @@ export default async function DashboardPage({
                       {sinIdentificar.length === 1
                         ? 'Hay un molino sin identificar (barra gris). '
                         : `Hay ${sinIdentificar.length} molinos sin identificar (barras grises). `}
+                      Tocá la barra para ponerle nombre, o andá a{' '}
                       <Link
-                        href={settingsHref}
+                        href={molinosHref}
                         className="font-medium text-primary underline-offset-2 hover:underline"
                       >
-                        Ponerles nombre
+                        Molinos
                       </Link>
+                      .
                     </span>
                   </p>
                 )}
@@ -323,10 +329,10 @@ export default async function DashboardPage({
                           {formatIsoDay(entry.fechaOrigen)}
                         </TableCell>
                         <TableCell>
-                          <EmisorLabel
+                          <MolinoLabel
                             nombre={entry.emisor}
                             cuit={entry.cuitAgente}
-                            settingsHref={settingsHref}
+                            molinosHref={molinosHref}
                           />
                         </TableCell>
                         <TableCell className="tabular-nums">
@@ -362,6 +368,7 @@ export default async function DashboardPage({
             </p>
           </>
         )}
+        </IdentificarMolinoProvider>
       </main>
     </div>
   );

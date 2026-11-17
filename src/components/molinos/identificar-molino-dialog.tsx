@@ -1,6 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
+import { useRouter } from 'next/navigation';
 import { Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -12,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Field, FieldDescription, FieldError } from '@/components/ui/field';
+import { FieldError } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
@@ -27,25 +37,27 @@ import {
   crearMolinoConCuit,
   formatCuit,
   loadMolinos,
-  type CuitAIdentificar,
-  type EmisorIdentity,
   type MolinoConCuits,
-} from '@/lib/retenciones/emisores';
+  type MolinoIdentity,
+} from '@/lib/molinos/molinos';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 
 /**
- * "¿De quién es este comprobante?" — THE identify flow, used from Configuración
- * and inline from the PDF preview. Two answers:
+ * "¿De quién es este comprobante?" — THE identify flow. One dialog, mounted
+ * once per screen by `IdentificarMolinoProvider`; anything under it (a badge
+ * in the PDF preview, a bar in the dashboard, a row in the Molinos section)
+ * opens it through `useIdentificarMolino()`.
  *
+ * Two answers:
  *  - "Es un molino que ya tengo": pick one of the catalog → the CUIT is linked
  *    to it (N CUITs → 1 molino).
- *  - "Es un molino nuevo": type a name, prefilled with the suggestion from
- *    `issuers.ts` when the CUIT has rules in code (one click to confirm).
+ *  - "Es un molino nuevo": type a name. The field starts EMPTY: there is no
+ *    name anywhere in the code to suggest, by design.
  *
- * The catalog is loaded when the dialog opens, so both callers always see the
- * current list without having to fetch it themselves. The user never has to
- * reason about a CUIT: the copy talks about comprobantes and molinos.
+ * The catalog is loaded when the dialog opens, so it is always current. The
+ * user never has to reason about a CUIT: the copy talks about comprobantes
+ * and molinos.
  */
 
 type Modo = 'existente' | 'nuevo';
@@ -55,18 +67,18 @@ function errorMessage(err: unknown): string {
 }
 
 export function IdentificarMolinoDialog({
-  pendiente,
+  cuit,
   onClose,
   onIdentified,
 }: {
-  /** The certificate being identified; `null` keeps the dialog closed. */
-  pendiente: CuitAIdentificar | null;
+  /** The CUIT being identified; `null` keeps the dialog closed. */
+  cuit: string | null;
   onClose: () => void;
   /** Called after the catalog was written, with what the CUIT now resolves to. */
-  onIdentified?: (cuit: string, identity: EmisorIdentity) => void;
+  onIdentified?: (cuit: string, identity: MolinoIdentity) => void;
 }) {
   const supabase = useMemo(() => createClient(), []);
-  const open = pendiente !== null;
+  const open = cuit !== null;
 
   const [molinos, setMolinos] = useState<MolinoConCuits[] | null>(null);
   const [modo, setModo] = useState<Modo>('nuevo');
@@ -75,22 +87,21 @@ export function IdentificarMolinoDialog({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fresh catalog every time it opens, and a clean form for this certificate.
+  // Fresh catalog every time it opens, and a clean form for this CUIT.
   useEffect(() => {
-    if (!pendiente) return;
+    if (!cuit) return;
     let cancelled = false;
     setMolinos(null);
     setError(null);
-    setNombre(pendiente.sugerido ?? '');
+    setNombre('');
     setModo('nuevo');
     loadMolinos(supabase)
       .then((list) => {
         if (cancelled) return;
         setMolinos(list);
         setMolinoId(list[0]?.id ?? '');
-        // Default to "ya tengo" only when there is something to pick and no
-        // suggestion makes "nuevo" the obvious one-click answer.
-        if (list.length > 0 && !pendiente.sugerido) setModo('existente');
+        // With a catalog to pick from, "ya tengo" is the likelier answer.
+        if (list.length > 0) setModo('existente');
       })
       .catch((err: unknown) => {
         if (!cancelled) {
@@ -101,7 +112,7 @@ export function IdentificarMolinoDialog({
     return () => {
       cancelled = true;
     };
-  }, [pendiente, supabase]);
+  }, [cuit, supabase]);
 
   const hasMolinos = (molinos?.length ?? 0) > 0;
   const loading = open && molinos === null;
@@ -112,22 +123,22 @@ export function IdentificarMolinoDialog({
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!pendiente || !canSubmit) return;
+    if (!cuit || !canSubmit) return;
     setPending(true);
     setError(null);
     try {
-      let identity: EmisorIdentity;
+      let identity: MolinoIdentity;
       if (modo === 'existente') {
-        await asociarCuitAMolino(supabase, pendiente.cuit, molinoId);
+        await asociarCuitAMolino(supabase, cuit, molinoId);
         const molino = molinos?.find((m) => m.id === molinoId);
         identity = { molinoId, nombre: molino?.nombre ?? '' };
         toast.success(`Listo: ese comprobante es de ${identity.nombre || 'ese molino'}.`);
       } else {
-        const molino = await crearMolinoConCuit(supabase, nombre, pendiente.cuit);
+        const molino = await crearMolinoConCuit(supabase, nombre, cuit);
         identity = { molinoId: molino.id, nombre: molino.nombre };
         toast.success(`Molino "${molino.nombre}" creado e identificado.`);
       }
-      onIdentified?.(pendiente.cuit, identity);
+      onIdentified?.(cuit, identity);
       onClose();
     } catch (err) {
       setError(errorMessage(err));
@@ -143,11 +154,11 @@ export function IdentificarMolinoDialog({
           <DialogHeader>
             <DialogTitle>¿De quién es este comprobante?</DialogTitle>
             <DialogDescription>
-              {pendiente && (
+              {cuit && (
                 <>
                   El agente de retención figura con el CUIT{' '}
                   <span className="font-medium text-foreground tabular-nums">
-                    {formatCuit(pendiente.cuit)}
+                    {formatCuit(cuit)}
                   </span>
                   . Decinos qué molino es y lo usamos para este y los próximos
                   comprobantes con ese CUIT.
@@ -216,22 +227,15 @@ export function IdentificarMolinoDialog({
               <span className="grid min-w-0 flex-1 gap-2">
                 <span className="text-sm font-medium text-foreground">Es un molino nuevo</span>
                 {modo === 'nuevo' && (
-                  <Field>
-                    <Input
-                      value={nombre}
-                      onChange={(e) => setNombre(e.target.value)}
-                      placeholder="Nombre del molino"
-                      autoFocus
-                      maxLength={100}
-                      className="h-9"
-                      aria-label="Nombre del molino"
-                    />
-                    {pendiente?.sugerido && nombre === pendiente.sugerido && (
-                      <FieldDescription className="text-xs">
-                        Nombre sugerido por las reglas de lectura. Podés cambiarlo.
-                      </FieldDescription>
-                    )}
-                  </Field>
+                  <Input
+                    value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                    placeholder="Nombre del molino"
+                    autoFocus
+                    maxLength={100}
+                    className="h-9"
+                    aria-label="Nombre del molino"
+                  />
                 )}
               </span>
             </label>
@@ -252,4 +256,48 @@ export function IdentificarMolinoDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+/** `identificar(cuit)` opens the dialog for that CUIT. */
+const IdentificarContext = createContext<((cuit: string) => void) | null>(null);
+
+/**
+ * Mounts the one dialog for a screen and hands `identificar(cuit)` down to
+ * anything that shows a "sin identificar" mark. By default, a successful
+ * identification refreshes the route, so Server Components (dashboard, the
+ * Molinos section) re-resolve names live; a client flow that keeps its own
+ * map (the PDF preview) passes `onIdentified` and updates it in place.
+ */
+export function IdentificarMolinoProvider({
+  children,
+  onIdentified,
+  refresh = true,
+}: {
+  children: ReactNode;
+  onIdentified?: (cuit: string, identity: MolinoIdentity) => void;
+  /** Call `router.refresh()` after identifying. */
+  refresh?: boolean;
+}) {
+  const router = useRouter();
+  const [cuit, setCuit] = useState<string | null>(null);
+  const identificar = useCallback((next: string) => setCuit(next), []);
+
+  return (
+    <IdentificarContext.Provider value={identificar}>
+      {children}
+      <IdentificarMolinoDialog
+        cuit={cuit}
+        onClose={() => setCuit(null)}
+        onIdentified={(c, identity) => {
+          onIdentified?.(c, identity);
+          if (refresh) router.refresh();
+        }}
+      />
+    </IdentificarContext.Provider>
+  );
+}
+
+/** The opener, or `null` outside a provider (the mark then falls back to a link). */
+export function useIdentificarMolino(): ((cuit: string) => void) | null {
+  return useContext(IdentificarContext);
 }

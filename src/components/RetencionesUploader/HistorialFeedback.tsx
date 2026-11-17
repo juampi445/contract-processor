@@ -1,11 +1,8 @@
 'use client';
 
-import Link from 'next/link';
-import { AlertTriangle, Check, History, Loader2, Lock, Tag } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { AlertTriangle, Check, History, Loader2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { formatCuit } from '@/lib/retenciones/emisores';
 import { formatDdMm, type ExistingExport } from '@/lib/retenciones/historial';
 import type { RegistroBloqueado } from '@/lib/retenciones/requeridos';
 
@@ -122,55 +119,6 @@ export function BlockedNotice({
         </ul>
       </div>
     </div>
-  );
-}
-
-/**
- * The mill's name where the row shows it, or the honest "sin identificar"
- * tag. With `onIdentify` the tag is a button that opens the identify dialog
- * right there (PDF preview); otherwise it links to Configuración (dashboard,
- * a Server Component). The user never has to reason about a CUIT: the
- * question is "de quién es este comprobante".
- */
-export function EmisorLabel({
-  nombre,
-  cuit,
-  settingsHref,
-  onIdentify,
-}: {
-  nombre: string | null;
-  cuit: string;
-  settingsHref: string;
-  onIdentify?: () => void;
-}) {
-  if (nombre) return <span>{nombre}</span>;
-  const badgeClass =
-    'gap-1 border-warning/40 text-warning [a]:hover:bg-warning/10 [button]:hover:bg-warning/10 [button]:cursor-pointer';
-  return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
-      <span className="text-muted-foreground tabular-nums">{formatCuit(cuit)}</span>
-      {onIdentify ? (
-        <Badge
-          variant="outline"
-          className={badgeClass}
-          render={
-            <button type="button" onClick={onIdentify} title="Identificar este molino ahora" />
-          }
-        >
-          <Tag />
-          sin identificar
-        </Badge>
-      ) : (
-        <Badge
-          variant="outline"
-          className={badgeClass}
-          render={<Link href={settingsHref} title="Identificar este molino en Configuración" />}
-        >
-          <Tag />
-          sin identificar
-        </Badge>
-      )}
-    </span>
   );
 }
 

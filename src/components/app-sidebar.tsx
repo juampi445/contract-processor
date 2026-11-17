@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   Check,
   ChevronsUpDown,
+  Factory,
   LayoutDashboard,
   LogOut,
   Plus,
@@ -153,6 +154,11 @@ export function AppSidebar({
             // Descarga de camiones, no de archivos: de ahí el camión.
             { title: 'Descargas', href: `${base}/descargas`, icon: Truck },
           ]}
+        />
+        {/* Master data: neither a tool nor an overview, so it stands alone. */}
+        <NavGroup
+          pathname={pathname}
+          items={[{ title: 'Molinos', href: `${base}/molinos`, icon: Factory }]}
         />
         <NavGroup
           label="Empresa"

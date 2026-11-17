@@ -1,40 +1,11 @@
 import type { Metadata } from 'next';
-import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/page-header';
+import { SettingsSection } from '@/components/settings-section';
 import { getSupabase, requireCompany, requireUser } from '@/lib/auth/dal';
-import { loadCuitsSinIdentificar, loadMolinos } from '@/lib/retenciones/emisores';
 import { CompanySettings } from './company-settings';
 import { MembersSettings, type Invitation, type Member } from './members-settings';
-import { MolinosSettings } from './molinos-settings';
 
 export const metadata: Metadata = { title: 'Configuración' };
-
-function SettingsSection({
-  id,
-  title,
-  description,
-  children,
-}: {
-  id: string;
-  title: string;
-  description: string;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      aria-labelledby={id}
-      className="grid gap-5 border-t border-border pt-8 first:border-t-0 first:pt-0 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-10"
-    >
-      <div>
-        <h2 id={id} className="text-sm font-semibold text-foreground">
-          {title}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      </div>
-      <div className="min-w-0">{children}</div>
-    </section>
-  );
-}
 
 export default async function SettingsPage({ params }: { params: Promise<{ company: string }> }) {
   const { company: slug } = await params;
@@ -45,15 +16,11 @@ export default async function SettingsPage({ params }: { params: Promise<{ compa
   ]);
   const isOwner = company.role === 'owner';
 
-  const [{ data: memberRows, error: membersError }, molinos, pendientes] = await Promise.all([
-    supabase
-      .from('memberships')
-      .select('user_id, role, created_at, profiles(email, full_name)')
-      .eq('company_id', company.id)
-      .order('created_at'),
-    loadMolinos(supabase),
-    loadCuitsSinIdentificar(supabase, company.id),
-  ]);
+  const { data: memberRows, error: membersError } = await supabase
+    .from('memberships')
+    .select('user_id, role, created_at, profiles(email, full_name)')
+    .eq('company_id', company.id)
+    .order('created_at');
   if (membersError) throw new Error(`No se pudieron cargar los miembros: ${membersError.message}`);
 
   const members: Member[] = memberRows.map((m) => ({
@@ -85,14 +52,6 @@ export default async function SettingsPage({ params }: { params: Promise<{ compa
           description="Datos que ven todos los miembros."
         >
           <CompanySettings company={company} canEdit={isOwner} />
-        </SettingsSection>
-
-        <SettingsSection
-          id="settings-molinos"
-          title="Molinos"
-          description="De quién es cada comprobante. Identificá los que aparecen sin nombre y ordená los molinos que ya tenés."
-        >
-          <MolinosSettings pendientes={pendientes} molinos={molinos} />
         </SettingsSection>
 
         <SettingsSection

@@ -21,6 +21,11 @@
  * The value is TEXT throughout the pipeline: leading zeros are part of the
  * identifier. Patterns match against the diacritic-stripped text, so they are
  * written without accents.
+ *
+ * This table holds READING RULES only, keyed by CUIT. Who the mill IS (its
+ * name) is data, lives in the `molinos` catalog in the database and is
+ * resolved by `src/lib/molinos`. The lowercase labels in the comments below
+ * name the PDF format the rule was derived from, nothing more.
  */
 
 /** How a mill's raw, block-separated number becomes the value BIT stores. */
@@ -44,7 +49,6 @@ export type LiqNormalization =
 export type IssuerConfidence = 'confirmed' | 'assumed';
 
 export interface IssuerSpec {
-  name: string;
   /** Where to find the certificate number, tried in order. */
   patterns: readonly RegExp[];
   normalization: LiqNormalization;
@@ -54,7 +58,6 @@ export interface IssuerSpec {
 export const ISSUERS: Record<string, IssuerSpec> = {
   // aca — "CONSTANCIA DE RETENCION 2000/00490345" -> 200000490345
   '30500120882': {
-    name: 'ACA',
     patterns: [/CONSTANCIA\s*DE\s*RETENCION\s*([\d\s/]+?)(?=\s|$)/i],
     normalization: 'concat',
     confidence: 'confirmed',
@@ -62,7 +65,6 @@ export const ISSUERS: Record<string, IssuerSpec> = {
 
   // amaggi — "N° de Certificado: 0003-00117798"
   '30711615519': {
-    name: 'Amaggi',
     patterns: [/N[°ºo]?\s*de\s*Certificado\s*:?\s*([\d-]+)/i],
     normalization: 'heuristic',
     confidence: 'assumed',
@@ -73,7 +75,6 @@ export const ISSUERS: Record<string, IssuerSpec> = {
   // only reliable anchor is the nnnn-yyyy-nnnnnn shape itself.
   // "0000-2026-125081" -> 2026125081: the point of sale is empty and dropped.
   '30511534492': {
-    name: 'ARCA',
     patterns: [/\b(\d{4}-\d{4}-\d{6})\b/],
     normalization: 'drop-empty-block',
     confidence: 'confirmed',
@@ -82,7 +83,6 @@ export const ISSUERS: Record<string, IssuerSpec> = {
   // bunge — "Nº de certificado: 0020-01500121" -> 002001500121, point of sale
   // INCLUDED. This is the case that rules out "strip leading zeros".
   '30700869918': {
-    name: 'Bunge',
     patterns: [/N[°ºo]?\s*de\s*certificado\s*:?\s*([\d-]+)/i],
     normalization: 'concat',
     confidence: 'confirmed',
@@ -92,7 +92,6 @@ export const ISSUERS: Record<string, IssuerSpec> = {
   // PRECEDES its label. Deliberately not the long "00001-2026-016603 Nº lega",
   // to stay consistent with cañuelas / idc.
   '30711160163': {
-    name: 'CHS',
     patterns: [/(\d{4,})\s+Numero\b/i],
     normalization: 'heuristic',
     confidence: 'assumed',
@@ -100,7 +99,6 @@ export const ISSUERS: Record<string, IssuerSpec> = {
 
   // cofco — "N° 1001-00405442" in the letterhead, with no "certificado" word.
   '33506737449': {
-    name: 'COFCO',
     patterns: [/N[°ºo]\s*(\d{3,4}-\d{6,10})\b/],
     normalization: 'heuristic',
     confidence: 'assumed',
@@ -109,7 +107,6 @@ export const ISSUERS: Record<string, IssuerSpec> = {
   // idc / LDC — "Nro. 6-0117947-023714" (not "Nro. Cuenta interno: 77538").
   // Three blocks, but the first is a real "6", so nothing is dropped.
   '30526712729': {
-    name: 'LDC / IDC',
     patterns: [/Nro\.?\s*(\d-\d{7}-\d{6})\b/i],
     normalization: 'heuristic',
     confidence: 'assumed',
@@ -117,7 +114,6 @@ export const ISSUERS: Record<string, IssuerSpec> = {
 
   // molino cañuelas — "Número 654274", one per page.
   '30507950848': {
-    name: 'Molino Cañuelas',
     patterns: [/Numero\s+(\d{4,})\b/i],
     normalization: 'heuristic',
     confidence: 'assumed',
@@ -150,8 +146,3 @@ export function normalizeLiqCorrelDgi(
   const kept = dropLeadingZeros ? blocks.slice(1) : blocks;
   return (kept.length ? kept : blocks).join('');
 }
-
-/** Human label for an issuer CUIT, used only in messages. */
-export const ISSUER_NAMES: Record<string, string> = Object.fromEntries(
-  Object.entries(ISSUERS).map(([cuit, spec]) => [cuit, spec.name]),
-);

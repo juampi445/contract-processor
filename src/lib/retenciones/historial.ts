@@ -26,7 +26,7 @@ import { dbErrorMessage } from '@/lib/auth/errors';
 import type { Database, Json } from '@/lib/supabase/database.types';
 import { downloadBlob } from './buildWorkbook';
 import { buildXml, retencionesXmlFileName, type RetencionXmlInput } from './buildXml';
-import type { NameResolver } from './emisores';
+import type { CuitVisto, NameResolver } from '@/lib/molinos/molinos';
 import { registrosBloqueados, type RegistroBloqueado } from './requeridos';
 import { normalizeFecha, toCents } from './toXmlValues';
 import type { FileResult, RetencionRow } from './types';
@@ -130,7 +130,7 @@ export function toXmlInput(row: RetencionRow): RetencionXmlInput {
  * precisely what they exported, and neither can drift from the other.
  *
  * The name is resolved through `resolveName` (the mill catalog in the
- * database, see `emisores.ts`) and stored as a snapshot. Without a resolver it
+ * database, see `@/lib/molinos`) and stored as a snapshot. Without a resolver it
  * is `null`: the code table never names a row. Display always re-resolves it
  * live, so naming a mill later fixes old rows too.
  */
@@ -160,6 +160,37 @@ export function toHistorialRecord(
   const row = result.row;
   if (!row) throw new Error('El certificado no tiene fila para guardar.');
   return toHistorialRecordFromXmlInput(toXmlInput(row), result.fileName || null, resolveName);
+}
+
+/**
+ * Every CUIT this company has processed, with how often and how recently.
+ * This is retenciones' half of the "sin identificar" list: the catalog module
+ * (`@/lib/molinos`) subtracts what it knows, and never reads this table.
+ */
+export async function loadCuitsVistos(
+  supabase: Client,
+  companyId: string,
+): Promise<CuitVisto[]> {
+  const { data, error } = await supabase
+    .from('retenciones')
+    .select('cuit_agente, fecha_origen')
+    .eq('company_id', companyId);
+  if (error) throw new Error(saveErrorMessage(error));
+
+  const seen = new Map<string, CuitVisto>();
+  for (const row of data) {
+    const current = seen.get(row.cuit_agente) ?? {
+      cuit: row.cuit_agente,
+      vistos: 0,
+      ultimaFecha: null,
+    };
+    current.vistos += 1;
+    if (!current.ultimaFecha || row.fecha_origen > current.ultimaFecha) {
+      current.ultimaFecha = row.fecha_origen;
+    }
+    seen.set(row.cuit_agente, current);
+  }
+  return [...seen.values()];
 }
 
 /** A liquidación of this batch that is already in the histórico. */

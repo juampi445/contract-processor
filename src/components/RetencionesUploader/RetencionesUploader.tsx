@@ -15,14 +15,6 @@ import {
   downloadBlob,
   retencionesFileName,
 } from '@/lib/retenciones/buildWorkbook';
-import {
-  loadEmisorMap,
-  nameResolverFrom,
-  nombreSugerido,
-  resolveEmisorNombre,
-  type CuitAIdentificar,
-  type EmisorMap,
-} from '@/lib/retenciones/emisores';
 import { extractPdfPages } from '@/lib/retenciones/extractPdfText';
 import {
   exportXmlBatch,
@@ -37,7 +29,14 @@ import { parseRetencionPages } from '@/lib/retenciones/parseDocument';
 import { registrosBloqueados } from '@/lib/retenciones/requeridos';
 import type { FileResult, RetencionRow } from '@/lib/retenciones/types';
 import { useCompany } from '@/components/company-provider';
-import { IdentificarMolinoDialog } from '@/components/identificar-molino-dialog';
+import { IdentificarMolinoProvider } from '@/components/molinos/identificar-molino-dialog';
+import { MolinoLabel } from '@/components/molinos/molino-label';
+import {
+  loadMolinoMap,
+  nameResolverFrom,
+  resolveMolinoNombre,
+  type MolinoMap,
+} from '@/lib/molinos/molinos';
 import { createClient } from '@/lib/supabase/client';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -57,7 +56,6 @@ import { cn } from '@/lib/utils';
 import {
   BlockedNotice,
   DuplicateWarning,
-  EmisorLabel,
   SaveIndicator,
   type SaveState,
 } from './HistorialFeedback';
@@ -160,12 +158,10 @@ export default function RetencionesUploader() {
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
   /** Liquidaciones of this batch already on file, awaiting the user's call. */
   const [duplicates, setDuplicates] = useState<ExistingExport[] | null>(null);
-  /** What the database knows about the CUITs of this batch (see emisores.ts). */
-  const [emisores, setEmisores] = useState<EmisorMap>({});
-  /** The certificate whose mill is being named inline, if any. */
-  const [identificando, setIdentificando] = useState<CuitAIdentificar | null>(null);
+  /** What the catalog knows about the CUITs of this batch (see @/lib/molinos). */
+  const [emisores, setEmisores] = useState<MolinoMap>({});
   const inputRef = useRef<HTMLInputElement>(null);
-  const settingsHref = `/${company.slug}/settings#settings-molinos`;
+  const molinosHref = `/${company.slug}/molinos`;
 
   const patchEntry = useCallback((id: string, patch: Partial<Entry>) => {
     setEntries((prev) =>
@@ -262,9 +258,9 @@ export default function RetencionesUploader() {
   const okRows = useMemo(() => okResults.map((r) => r.row!), [okResults]);
 
   /**
-   * Resolve the mills of this batch as soon as their CUITs are known:
-   * database first, then the code table. Keyed on the sorted CUIT list so a
-   * re-render or an edit to CONTRATO does not trigger another read.
+   * Resolve the mills of this batch from the catalog as soon as their CUITs
+   * are known. Keyed on the sorted CUIT list so a re-render or an edit to
+   * CONTRATO does not trigger another read.
    */
   const cuitKey = useMemo(
     () => [...new Set(okRows.map((r) => r.cuitCorredor))].sort().join(','),
@@ -273,7 +269,7 @@ export default function RetencionesUploader() {
   useEffect(() => {
     if (!cuitKey) return;
     let cancelled = false;
-    loadEmisorMap(supabase, cuitKey.split(','))
+    loadMolinoMap(supabase, cuitKey.split(','))
       .then((map) => {
         if (!cancelled) setEmisores((prev) => ({ ...prev, ...map }));
       })
@@ -389,6 +385,14 @@ export default function RetencionesUploader() {
   const okCount = okRows.length;
 
   return (
+    // The one identify dialog for this screen. Naming a mill here updates
+    // every row of the batch with that CUIT at once, no page reload.
+    <IdentificarMolinoProvider
+      refresh={false}
+      onIdentified={(cuit, identity) =>
+        setEmisores((prev) => ({ ...prev, [cuit]: identity }))
+      }
+    >
     <div className="flex min-h-svh flex-col">
       <PageHeader
         title="Retenciones"
@@ -474,7 +478,7 @@ export default function RetencionesUploader() {
                       .filter(
                         (w) =>
                           w.code !== 'emisor_desconocido' ||
-                          resolveEmisorNombre(r.row?.cuitCorredor ?? '', emisores) === null,
+                          resolveMolinoNombre(r.row?.cuitCorredor ?? '', emisores) === null,
                       )
                       .map((w, k) => ({
                         key: `${r.id}-w-${k}`,
@@ -655,16 +659,10 @@ export default function RetencionesUploader() {
                           />
                         </TableCell>
                         <TableCell>
-                          <EmisorLabel
+                          <MolinoLabel
                             nombre={resolveName(row.cuitCorredor)}
                             cuit={row.cuitCorredor}
-                            settingsHref={settingsHref}
-                            onIdentify={() =>
-                              setIdentificando({
-                                cuit: row.cuitCorredor,
-                                sugerido: nombreSugerido(row.cuitCorredor),
-                              })
-                            }
+                            molinosHref={molinosHref}
                           />
                         </TableCell>
                         {PREVIEW_COLS.map((c) => (
@@ -781,16 +779,6 @@ export default function RetencionesUploader() {
         <XlsxToXmlPanel />
       </main>
 
-      {/* Same dialog as Configuración → Molinos. Naming here updates every
-          row of this batch with that CUIT at once, no page reload. */}
-      <IdentificarMolinoDialog
-        pendiente={identificando}
-        onClose={() => setIdentificando(null)}
-        onIdentified={(cuit, identity) =>
-          setEmisores((prev) => ({ ...prev, [cuit]: identity }))
-        }
-      />
-
       <footer className="border-t border-border p-6 text-center text-xs text-muted-foreground">
         <p>Coopagro · IVA Rég. Granos RG AFIP 2300</p>
         <p className="mx-auto mt-1.5 max-w-xl text-pretty">
@@ -801,5 +789,6 @@ export default function RetencionesUploader() {
         </p>
       </footer>
     </div>
+    </IdentificarMolinoProvider>
   );
 }

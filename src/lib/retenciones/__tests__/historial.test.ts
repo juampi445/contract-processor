@@ -22,7 +22,7 @@ const row = (overrides: Partial<RetencionRow> = {}): RetencionRow => ({
   impSinIva: '451263,08',
   impTotal: '451263,08',
   nroRegOlcu: 1,
-  cuitCorredor: '30500120882', // ACA
+  cuitCorredor: '30500120882', // molino de prueba
   observacion: null,
   conceptoRetIva: '3310-09051822',
   ...overrides,
@@ -98,15 +98,15 @@ describe('saveableResults', () => {
   });
 });
 
-/** The catalog as the tests see it: ACA named, everything else not. */
-const catalog = (cuit: string): string | null => (cuit === '30500120882' ? 'ACA' : null);
+/** The catalog as the tests see it: one CUIT named, everything else not. */
+const catalog = (cuit: string): string | null => (cuit === '30500120882' ? 'Molino A' : null);
 
 describe('toHistorialRecord', () => {
   it('maps a preview row to its database record', () => {
     expect(toHistorialRecord(result(), catalog)).toEqual({
       liquidacion: '3310-09051822',
       liq_correl_dgi: '200000490345',
-      emisor: 'ACA',
+      emisor: 'Molino A',
       cuit_agente: '30500120882',
       fecha_origen: '2026-06-01',
       importe: '451263.08',
@@ -125,7 +125,7 @@ describe('toHistorialRecord', () => {
     expect(toHistorialRecord(unknown, catalog).emisor).toBeNull();
   });
 
-  it('never names a row from the code table: without a resolver it is null, even for ACA', () => {
+  it('never names a row from the code table: without a resolver it is null, even for a CUIT with reading rules', () => {
     expect(toHistorialRecord(result()).emisor).toBeNull();
   });
 
@@ -133,7 +133,7 @@ describe('toHistorialRecord', () => {
     const named = result({ row: row({ cuitCorredor: '30710865607' }) });
     const resolver = (cuit: string) => (cuit === '30710865607' ? 'Molino Nuevo' : null);
     expect(toHistorialRecord(named, resolver).emisor).toBe('Molino Nuevo');
-    expect(toHistorialRecord(result(), () => 'ACA renombrado').emisor).toBe('ACA renombrado');
+    expect(toHistorialRecord(result(), () => 'Molino A (renombrado)').emisor).toBe('Molino A (renombrado)');
   });
 
   it('turns empty optional fields into null instead of empty strings', () => {
@@ -157,7 +157,7 @@ describe('toHistorialRecordFromXmlInput', () => {
     expect(toHistorialRecordFromXmlInput(input, 'retenciones.xlsx', catalog)).toEqual({
       liquidacion: '3310-09051822',
       liq_correl_dgi: '200000490345',
-      emisor: 'ACA',
+      emisor: 'Molino A',
       cuit_agente: '30500120882',
       fecha_origen: '2026-06-01',
       importe: '451263.08',
@@ -224,7 +224,7 @@ describe('exportXmlBatch — the one path every XML takes', () => {
           { input, sourceFilename: 'a.pdf', saveable: true },
           { input: { ...input, ordenInter: '' }, sourceFilename: 'b.pdf', saveable: true },
         ],
-        () => 'ACA',
+        () => 'Molino A',
         (_blob, name) => downloads.push(name),
       ),
     ).rejects.toBeInstanceOf(XmlBloqueadoError);
@@ -255,7 +255,7 @@ describe('exportXmlBatch — the one path every XML takes', () => {
         { input, sourceFilename: 'a.pdf', saveable: true },
         { input: { ...input, concepto: '3310-00000001' }, sourceFilename: 'b.pdf', saveable: false },
       ],
-      () => 'ACA',
+      () => 'Molino A',
       (_blob, name) => downloads.push(name),
     );
     expect(downloads).toHaveLength(1);
@@ -265,7 +265,7 @@ describe('exportXmlBatch — the one path every XML takes', () => {
       {
         liquidacion: '3310-09051822',
         liq_correl_dgi: '200000490345',
-        emisor: 'ACA',
+        emisor: 'Molino A',
         cuit_agente: '30500120882',
         fecha_origen: '2026-06-01',
         importe: '451263.08',
@@ -299,7 +299,7 @@ describe('exportXmlBatch — the one path every XML takes', () => {
       client as any,
       'company',
       [{ input, sourceFilename: null, saveable: true }],
-      () => 'ACA',
+      () => 'Molino A',
       () => undefined,
     );
     expect(outcome.saved).toBe(0);

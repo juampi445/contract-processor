@@ -9,10 +9,10 @@ import {
   Sheet as SheetIcon,
 } from 'lucide-react';
 import {
-  loadEmisorMap,
+  loadMolinoMap,
   nameResolverFrom,
-  type EmisorMap,
-} from '@/lib/retenciones/emisores';
+  type MolinoMap,
+} from '@/lib/molinos/molinos';
 import {
   exportXmlBatch,
   findExistingExports,
@@ -51,7 +51,7 @@ export default function XlsxToXmlPanel() {
   const [genError, setGenError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({ status: 'idle' });
   const [duplicates, setDuplicates] = useState<ExistingExport[] | null>(null);
-  const [emisores, setEmisores] = useState<EmisorMap>({});
+  const [emisores, setEmisores] = useState<MolinoMap>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   const onSelect = useCallback(
@@ -83,11 +83,11 @@ export default function XlsxToXmlPanel() {
     [],
   );
 
-  // Resolve the mills of the file (database first, then the code table).
+  // Resolve the mills of the file from the catalog.
   useEffect(() => {
     if (!result || result.rows.length === 0) return;
     let cancelled = false;
-    loadEmisorMap(supabase, result.rows.map((r) => r.cuitCorredor))
+    loadMolinoMap(supabase, result.rows.map((r) => r.cuitCorredor))
       .then((map) => {
         if (!cancelled) setEmisores(map);
       })

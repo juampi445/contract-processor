@@ -8,7 +8,7 @@ import {
   extractLiqCorrelDgi,
 } from './fields';
 import { isValidCuit } from './cuit';
-import { ISSUER_NAMES } from './issuers';
+import { ISSUERS } from './issuers';
 import type { ParseError, ParseResult, ParseWarning, RetencionRow } from './types';
 
 /** Minimum text length below which we treat the PDF as having no text layer. */
@@ -69,11 +69,11 @@ export function parseRetencion(text: string): ParseResult {
   // the comprobante is passed in so it can never be mistaken for the number.
   const liqCorrelDgi = extractLiqCorrelDgi(text, cuitCorredor, conceptoRetIva);
   if (!liqCorrelDgi) {
-    const issuer = cuitCorredor ? (ISSUER_NAMES[cuitCorredor] ?? null) : null;
+    const hasRules = !!cuitCorredor && !!ISSUERS[cuitCorredor];
     errors.push({
       field: 'liqCorrelDgi',
-      message: issuer
-        ? `No se encontró LIQCORRELDGI (Nº de certificado) de ${issuer}`
+      message: hasRules
+        ? `No se encontró LIQCORRELDGI (Nº de certificado) con las reglas del emisor CUIT ${cuitCorredor}`
         : 'No se encontró LIQCORRELDGI (Nº de certificado) — formato no reconocido',
     });
   }
@@ -125,10 +125,11 @@ export function parseRetencion(text: string): ParseResult {
     }
   }
 
-  // Only the NAME may be missing here: the data was read with the generic
-  // patterns and is exportable and saveable. Whether the mill has a name is
-  // resolved later (database first, then this same table), not at parse time.
-  if (cuitCorredor && !ISSUER_NAMES[cuitCorredor]) {
+  // "Unknown" here means the CUIT has no reading rules of its own, so the
+  // fields came from the generic patterns. The data is exportable and
+  // saveable; the mill's NAME is a separate matter, resolved from the
+  // catalog in the database, never at parse time.
+  if (cuitCorredor && !ISSUERS[cuitCorredor]) {
     warnings.push({
       code: 'emisor_desconocido',
       message: `Revisar: emisor no conocido (CUIT ${cuitCorredor}), campos leídos con reglas genéricas`,

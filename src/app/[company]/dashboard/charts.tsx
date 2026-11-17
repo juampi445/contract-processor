@@ -14,6 +14,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart';
+import { useIdentificarMolino } from '@/components/molinos/identificar-molino-dialog';
 import {
   formatMoney,
   formatMoneyCompact,
@@ -77,6 +78,7 @@ export function MonthlyChart({ data }: { data: MonthlyTotal[] }) {
  * the long tail of small issuers this list tends to have.
  */
 export function EmisorChart({ data }: { data: EmisorTotal[] }) {
+  const identificar = useIdentificarMolino();
   const top = data.slice(0, 8);
   return (
     <ChartContainer
@@ -108,7 +110,17 @@ export function EmisorChart({ data }: { data: EmisorTotal[] }) {
         <ChartTooltip
           content={<ChartTooltipContent formatter={tooltipFormatter} />}
         />
-        <Bar dataKey="cents" radius={[0, 4, 4, 0]}>
+        <Bar
+          dataKey="cents"
+          radius={[0, 4, 4, 0]}
+          // A grey (unnamed) bar opens the identify dialog for its CUIT.
+          onClick={(bar: unknown) => {
+            const payload = (bar as { payload?: EmisorTotal })?.payload;
+            if (payload?.sinIdentificar && payload.cuit && identificar) {
+              identificar(payload.cuit);
+            }
+          }}
+        >
           {top.map((entry, index) => (
             <Cell
               key={entry.emisor}
@@ -120,6 +132,7 @@ export function EmisorChart({ data }: { data: EmisorTotal[] }) {
                   : `var(--chart-${(index % 5) + 1})`
               }
               fillOpacity={entry.sinIdentificar ? 0.45 : 1}
+              cursor={entry.sinIdentificar && identificar ? 'pointer' : undefined}
             />
           ))}
         </Bar>

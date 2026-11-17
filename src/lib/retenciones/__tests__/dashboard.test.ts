@@ -20,7 +20,7 @@ import {
 const entry = (
   fechaOrigen: string,
   importeCents: number,
-  emisor: string | null = 'ACA',
+  emisor: string | null = 'Molino A',
 ): HistorialEntry => ({
   id: `${fechaOrigen}-${importeCents}`,
   liquidacion: '3310-09051822',
@@ -153,13 +153,13 @@ describe('monthlyTotals', () => {
 describe('totalsByEmisor', () => {
   it('sorts by amount, descending', () => {
     const totals = totalsByEmisor([
-      entry('2026-01-10', 100, 'ACA'),
-      entry('2026-01-11', 900, 'Bunge'),
-      entry('2026-01-12', 50, 'ACA'),
+      entry('2026-01-10', 100, 'Molino A'),
+      entry('2026-01-11', 900, 'Molino B'),
+      entry('2026-01-12', 50, 'Molino A'),
     ]);
     expect(totals).toEqual([
-      { emisor: 'Bunge', cuit: null, sinIdentificar: false, cents: 900, count: 1 },
-      { emisor: 'ACA', cuit: null, sinIdentificar: false, cents: 150, count: 2 },
+      { emisor: 'Molino B', cuit: null, sinIdentificar: false, cents: 900, count: 1 },
+      { emisor: 'Molino A', cuit: null, sinIdentificar: false, cents: 150, count: 2 },
     ]);
   });
 
@@ -182,9 +182,9 @@ describe('computeKpis', () => {
 
   it('scopes three numbers to the range and pins the month one', () => {
     const all = [
-      entry('2026-09-02', 1000, 'ACA'),
-      entry('2026-09-15', 500, 'Bunge'),
-      entry('2026-03-01', 7000, 'CHS'),
+      entry('2026-09-02', 1000, 'Molino A'),
+      entry('2026-09-15', 500, 'Molino B'),
+      entry('2026-03-01', 7000, 'Molino C'),
     ];
     const range = { from: '2026-01-01', to: '2026-12-31' };
 
