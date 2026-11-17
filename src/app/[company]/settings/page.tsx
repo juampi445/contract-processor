@@ -1,38 +1,11 @@
 import type { Metadata } from 'next';
-import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/page-header';
+import { SettingsSection } from '@/components/settings-section';
 import { getSupabase, requireCompany, requireUser } from '@/lib/auth/dal';
 import { CompanySettings } from './company-settings';
 import { MembersSettings, type Invitation, type Member } from './members-settings';
 
 export const metadata: Metadata = { title: 'Configuración' };
-
-function SettingsSection({
-  id,
-  title,
-  description,
-  children,
-}: {
-  id: string;
-  title: string;
-  description: string;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      aria-labelledby={id}
-      className="grid gap-5 border-t border-border pt-8 first:border-t-0 first:pt-0 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-10"
-    >
-      <div>
-        <h2 id={id} className="text-sm font-semibold text-foreground">
-          {title}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      </div>
-      <div className="min-w-0">{children}</div>
-    </section>
-  );
-}
 
 export default async function SettingsPage({ params }: { params: Promise<{ company: string }> }) {
   const { company: slug } = await params;

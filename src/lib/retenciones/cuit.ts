@@ -8,18 +8,11 @@
  * `nn-nnnnnnnn-n` spelling — and never "any 11 digits that happen to validate".
  */
 
-const WEIGHTS = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+import { isValidCuit } from '@/lib/cuit';
 
-/** `true` when `digits` is 11 digits and its mod-11 check digit is correct. */
-export function isValidCuit(digits: string): boolean {
-  if (!/^\d{11}$/.test(digits)) return false;
-
-  const sum = WEIGHTS.reduce((acc, w, i) => acc + w * Number(digits[i]), 0);
-  const rest = 11 - (sum % 11);
-  const expected = rest === 11 ? 0 : rest === 10 ? 9 : rest;
-
-  return expected === Number(digits[10]);
-}
+// The check digit itself is shared app-wide (`src/lib/cuit.ts`); this module
+// adds the PDF-specific recognition on top and re-exports it for its callers.
+export { isValidCuit };
 
 /**
  * The canonical spelling: two digits, hyphen, eight digits, hyphen, the check

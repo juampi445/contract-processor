@@ -41,7 +41,7 @@ export default async function SelectCompanyPage() {
         {companies.map((company) => (
           <li key={company.id}>
             <Link
-              href={`/${company.slug}/retenciones`}
+              href={`/${company.slug}/dashboard`}
               className="group flex items-center gap-3 rounded-xl border border-border bg-card p-3 transition-colors outline-none hover:border-primary/40 hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <CompanyAvatar name={company.name} logoPath={company.logoPath} size="lg" />

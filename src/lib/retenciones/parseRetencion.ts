@@ -8,8 +8,8 @@ import {
   extractLiqCorrelDgi,
 } from './fields';
 import { isValidCuit } from './cuit';
-import { ISSUER_NAMES } from './issuers';
-import type { ParseError, ParseResult, RetencionRow } from './types';
+import { ISSUERS } from './issuers';
+import type { ParseError, ParseResult, ParseWarning, RetencionRow } from './types';
 
 /** Minimum text length below which we treat the PDF as having no text layer. */
 const MIN_TEXT_LENGTH = 50;
@@ -42,7 +42,7 @@ export function parseRetencion(text: string): ParseResult {
   }
 
   const errors: ParseError[] = [];
-  const warnings: string[] = [];
+  const warnings: ParseWarning[] = [];
 
   const conceptoRetIva = extractConceptoRetIva(text);
   if (!conceptoRetIva) {
@@ -69,11 +69,11 @@ export function parseRetencion(text: string): ParseResult {
   // the comprobante is passed in so it can never be mistaken for the number.
   const liqCorrelDgi = extractLiqCorrelDgi(text, cuitCorredor, conceptoRetIva);
   if (!liqCorrelDgi) {
-    const issuer = cuitCorredor ? (ISSUER_NAMES[cuitCorredor] ?? null) : null;
+    const hasRules = !!cuitCorredor && !!ISSUERS[cuitCorredor];
     errors.push({
       field: 'liqCorrelDgi',
-      message: issuer
-        ? `No se encontró LIQCORRELDGI (Nº de certificado) de ${issuer}`
+      message: hasRules
+        ? `No se encontró LIQCORRELDGI (Nº de certificado) con las reglas del emisor CUIT ${cuitCorredor}`
         : 'No se encontró LIQCORRELDGI (Nº de certificado) — formato no reconocido',
     });
   }
@@ -118,16 +118,22 @@ export function parseRetencion(text: string): ParseResult {
     const expected = base.num * RATE;
     const drift = Math.abs(impSinIva.num - expected) / expected;
     if (drift > RATE_TOLERANCE) {
-      warnings.push(
-        `Revisar: el retenido (${impSinIva.esAr}) no es el 5% de la base (${base.esAr})`,
-      );
+      warnings.push({
+        code: 'retencion_no_5pct',
+        message: `Revisar: el retenido (${impSinIva.esAr}) no es el 5% de la base (${base.esAr})`,
+      });
     }
   }
 
-  if (cuitCorredor && !ISSUER_NAMES[cuitCorredor]) {
-    warnings.push(
-      `Revisar: emisor no conocido (CUIT ${cuitCorredor}), campos leídos con reglas genéricas`,
-    );
+  // "Unknown" here means the CUIT has no reading rules of its own, so the
+  // fields came from the generic patterns. The data is exportable and
+  // saveable; the mill's NAME is a separate matter, resolved from the
+  // catalog in the database, never at parse time.
+  if (cuitCorredor && !ISSUERS[cuitCorredor]) {
+    warnings.push({
+      code: 'emisor_desconocido',
+      message: `Revisar: emisor no conocido (CUIT ${cuitCorredor}), campos leídos con reglas genéricas`,
+    });
   }
 
   const row: RetencionRow = {

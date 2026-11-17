@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import type { RetencionXmlInput } from './buildXml';
-import { normalizeFecha, toCents } from './toXmlValues';
+import { validarXmlInput } from './requeridos';
+import { normalizeFecha } from './toXmlValues';
 
 const SHEET_NAME = 'Hoja1';
 
@@ -36,9 +37,6 @@ const FIELD_LABEL: Record<keyof typeof COL, string> = {
   concepto: 'CONCEPTO_RETIVA',
 };
 
-// Number of mapped data fields; a row with all of them present is complete.
-const FIELD_COUNT = Object.keys(COL).length;
-
 export interface XlsxRowError {
   /** 1-indexed Excel row number. */
   row: number;
@@ -47,6 +45,8 @@ export interface XlsxRowError {
 
 export interface XlsxReadResult {
   rows: RetencionXmlInput[];
+  /** Excel row number of each entry of `rows`, to name it in messages. */
+  rowNumbers: number[];
   errors: XlsxRowError[];
   /** Set when the whole file is unusable (wrong format); rows/errors empty. */
   fatal: string | null;
@@ -88,7 +88,7 @@ export async function readXlsx(file: File): Promise<XlsxReadResult> {
   const ws = wb.getWorksheet(SHEET_NAME) ?? wb.worksheets[0];
 
   if (!ws) {
-    return { rows: [], errors: [], fatal: 'El archivo no tiene el formato esperado' };
+    return { rows: [], rowNumbers: [], errors: [], fatal: 'El archivo no tiene el formato esperado' };
   }
 
   const headerRow = ws.getRow(1);
@@ -98,10 +98,11 @@ export async function readXlsx(file: File): Promise<XlsxReadResult> {
       expected.toUpperCase(),
   );
   if (!headersOk) {
-    return { rows: [], errors: [], fatal: 'El archivo no tiene el formato esperado' };
+    return { rows: [], rowNumbers: [], errors: [], fatal: 'El archivo no tiene el formato esperado' };
   }
 
   const rows: RetencionXmlInput[] = [];
+  const rowNumbers: number[] = [];
   const errors: XlsxRowError[] = [];
 
   for (let rowNo = 2; rowNo <= ws.rowCount; rowNo += 1) {
@@ -129,72 +130,45 @@ export async function readXlsx(file: File): Promise<XlsxReadResult> {
 
     if (presentCount === 0) continue; // fully empty row → skip silently
 
-    if (presentCount < FIELD_COUNT) {
-      const missing = (Object.keys(present) as (keyof typeof COL)[])
-        .filter((k) => !present[k])
-        .map((k) => FIELD_LABEL[k]);
-      // A/B don't come from the PDFs, so an incomplete row is most often those
-      // two — spell out that they're the ones the user fills in by hand.
-      const handHint =
-        !present.contrato || !present.ordenInter
-          ? ' (CONTRATO y ORDENINTER se completan a mano, una por fila)'
-          : '';
+    // A row missing any of the PDF-derived columns (C, D, F, I, K) is not a
+    // certificate we can do anything with. A and B (CONTRATO / ORDENINTER)
+    // are different: they are filled in by hand, so a row without them is
+    // READ, and it is the XML step that blocks it — with the message of which
+    // one is missing — through `CAMPOS_REQUERIDOS_XML`. That keeps this reader
+    // and the PDF preview on the same rule.
+    const missingData = (Object.keys(present) as (keyof typeof COL)[])
+      .filter((k) => k !== 'contrato' && k !== 'ordenInter' && !present[k])
+      .map((k) => FIELD_LABEL[k]);
+    if (missingData.length > 0) {
       errors.push({
         row: rowNo,
-        message: `Fila incompleta — faltan: ${missing.join(', ')}${handHint}`,
+        message: `Fila incompleta — faltan: ${missingData.join(', ')}`,
       });
       continue;
     }
 
+    // The hand-typed IDs are digits: strip separators Excel may have added
+    // ("126.080.440"), but reject text that has no digits at all.
     const contratoDigits = rawContrato.replace(/\D/g, '');
-    if (contratoDigits.length === 0) {
-      errors.push({
-        row: rowNo,
-        message: `CONTRATO inválido (solo dígitos): ${rawContrato}`,
-      });
+    if (rawContrato.length > 0 && contratoDigits.length === 0) {
+      errors.push({ row: rowNo, message: `CONTRATO inválido (solo dígitos): ${rawContrato}` });
       continue;
     }
-
     const ordenInterDigits = rawOrdenInter.replace(/\D/g, '');
-    if (ordenInterDigits.length === 0) {
-      errors.push({
-        row: rowNo,
-        message: `ORDENINTER inválido (solo dígitos): ${rawOrdenInter}`,
-      });
+    if (rawOrdenInter.length > 0 && ordenInterDigits.length === 0) {
+      errors.push({ row: rowNo, message: `ORDENINTER inválido (solo dígitos): ${rawOrdenInter}` });
       continue;
     }
 
     const cuitDigits = rawCuit.replace(/\D/g, '');
-    if (cuitDigits.length !== 11) {
-      errors.push({
-        row: rowNo,
-        message: `CUITCORREDOR inválido (se esperaban 11 dígitos): ${rawCuit}`,
-      });
-      continue;
-    }
-
-    let fecha: string;
+    let fecha: string | Date = rawFechaCell;
     try {
       fecha = normalizeFecha(rawFechaCell);
     } catch {
-      errors.push({
-        row: rowNo,
-        message: `FECHAORIGEN inválida (dd/mm/yyyy): ${rawFecha}`,
-      });
-      continue;
+      // Reported below by validarXmlInput, with the same wording as the PDF flow.
     }
 
-    try {
-      toCents(rawImporte); // validate; buildXml re-runs the same conversion
-    } catch {
-      errors.push({
-        row: rowNo,
-        message: `IMPSINIVA inválido: ${rawImporte}`,
-      });
-      continue;
-    }
-
-    rows.push({
+    const input: RetencionXmlInput = {
       contrato: contratoDigits,
       ordenInter: ordenInterDigits,
       liqCorrelDgi: rawLiq,
@@ -202,8 +176,20 @@ export async function readXlsx(file: File): Promise<XlsxReadResult> {
       importe: rawImporte,
       cuitCorredor: cuitDigits,
       concepto: rawConcepto,
-    });
+    };
+
+    // Same validations the parser applies to a PDF (CUIT mod-11, comprobante
+    // 3310, date, amount), so a hand-edited spreadsheet cannot slip a value
+    // past them. Missing A/B are deliberately NOT errors here (see above).
+    const invalid = validarXmlInput(input).filter((e) => !e.startsWith('Falta '));
+    if (invalid.length > 0) {
+      errors.push({ row: rowNo, message: invalid.join(' · ') });
+      continue;
+    }
+
+    rows.push(input);
+    rowNumbers.push(rowNo);
   }
 
-  return { rows, errors, fatal: null };
+  return { rows, rowNumbers, errors, fatal: null };
 }

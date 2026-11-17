@@ -26,11 +26,30 @@ export interface ParseError {
 }
 
 /**
+ * A non-blocking review flag. The two kinds are deliberately distinct because
+ * they mean different things downstream:
+ *
+ *  - `emisor_desconocido`: the mill has no rules of its own in `issuers.ts`,
+ *    so the fields were read with the generic patterns. The DATA is fine; at
+ *    most the name is missing. The row is exported AND saved.
+ *  - `retencion_no_5pct`: the retained amount is not 5% of the base, so one
+ *    of the two amounts was read from the wrong place. The data is NOT
+ *    reliable: the row can still be exported by the user's choice, but it is
+ *    never saved to the histórico.
+ */
+export type ParseWarningCode = 'emisor_desconocido' | 'retencion_no_5pct';
+
+export interface ParseWarning {
+  code: ParseWarningCode;
+  message: string;
+}
+
+/**
  * Result of parsing a normalized PDF string. Either a fully-populated row,
  * or the list of field errors that prevented it.
  */
 export type ParseResult =
-  | { ok: true; row: RetencionRow; warnings: string[] }
+  | { ok: true; row: RetencionRow; warnings: ParseWarning[] }
   | { ok: false; errors: ParseError[] };
 
 /**
@@ -49,5 +68,5 @@ export interface FileResult {
   status: 'ok' | 'error';
   row?: RetencionRow;
   errors?: ParseError[];
-  warnings?: string[];
+  warnings?: ParseWarning[];
 }
